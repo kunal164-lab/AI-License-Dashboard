@@ -25,31 +25,58 @@ test('isAdminAccess is true only for canWrite, regardless of vbu', () => {
 // ---- Local-admin Dashboard View preview (isPreviewingVbu) ----
 // server/services/dashboardViews.js#applyLocalAdminPreview is the only
 // thing that ever sets isPreviewingVbu — it can never be set for (or
-// reached by) a real Microsoft-authenticated session.
+// reached by) a real Microsoft-authenticated session (structurally
+// unreachable — applyLocalAdminPreview only ever runs for
+// authenticationProvider === 'local').
 //
-// isPreviewingVbu is deliberately IGNORED by isAdminAccess (reversed from
-// an earlier design — see isAdminAccess's own comment in vbuScope.js for
-// the concrete production bug this caused: a previewing admin randomly
-// losing access to real users' detail pages, live-confirmed as 153/296
-// and 163/296 real canonical users becoming inaccessible depending on
-// which Dashboard View happened to be selected). An admin's own
-// authorization is never narrowed by which view they are previewing.
+// isAdminAccess is `canWrite && !isPreviewingVbu` (Dashboard View + VBU
+// Data Assignment spec, "IMPORTANT DISTINCTION": RBAC authorization and
+// business-data VBU scope are different concepts). A real Microsoft admin
+// (RBAC via role_group_mappings) never has isPreviewingVbu set at all — the
+// change below can never affect them, only a local admin who has
+// EXPLICITLY selected a Dashboard View with a real configured VBU scope to
+// preview. This is a deliberate preview/context restriction on business
+// DATA only — RBAC (canWrite/allowedPages), and the ability to manage/
+// preview Dashboard Views, are completely untouched (requireWrite/
+// requireAdminAccess in server/auth/middleware.js read access.canWrite
+// directly, never this function).
 
-test('isAdminAccess: canWrite alone always bypasses scoping, regardless of isPreviewingVbu — Dashboard View selection can never narrow an admin\'s own authorization', () => {
+test('isAdminAccess: canWrite alone bypasses scoping when NOT previewing — the common case for both a real Microsoft admin (isPreviewingVbu never set) and a local admin with no selection / previewing an unconfigured view', () => {
   assert.equal(isAdminAccess({ canWrite: true }), true)
   assert.equal(isAdminAccess({ canWrite: true, isPreviewingVbu: false }), true)
-  assert.equal(isAdminAccess({ canWrite: true, isPreviewingVbu: true, vbu: 'VBU - SSP Worldwide' }), true)
-  assert.equal(isAdminAccess({ canWrite: true, isPreviewingVbu: true, allowedVbus: ['VBU - SSP Worldwide'] }), true)
 })
 
-test('scopeCanonicalUsersByVbu: an admin previewing a single-VBU Dashboard View (e.g. SSP Worldwide) still sees EVERY VBU\'s users — preview only ever affects branding, never business-data access', () => {
-  const previewingWorldwide = { canWrite: true, isPreviewingVbu: true, vbu: 'VBU - SSP Worldwide', allowedVbus: ['VBU - SSP Worldwide'] }
+test('isAdminAccess: canWrite + isPreviewingVbu:true (an explicit local-admin preview of a VBU-scoped view) no longer bypasses — business data must respect the preview\'s configured scope', () => {
+  assert.equal(isAdminAccess({ canWrite: true, isPreviewingVbu: true, vbu: 'VBU - SSP Worldwide' }), false)
+  assert.equal(isAdminAccess({ canWrite: true, isPreviewingVbu: true, allowedVbus: ['VBU - SSP Worldwide'] }), false)
+})
+
+test('BUG 2 regression: a local admin previewing SSP UK & Ireland (a single-VBU Dashboard View) sees ONLY that VBU\'s users, not every VBU — this is the exact reported bug ("data from other VBUs is still visible")', () => {
+  const previewingUkAndIreland = { canWrite: true, isPreviewingVbu: true, vbu: 'VBU - SSP UK & Ireland', allowedVbus: ['VBU - SSP UK & Ireland'] }
   const users = [
     { _id: '1', vbu: 'VBU - SSP UK & Ireland' },
     { _id: '2', vbu: 'VBU - SSP Worldwide' },
     { _id: '3', vbu: 'VBU - SSP Consolidated' }
   ]
-  assert.deepEqual(scopeCanonicalUsersByVbu(users, previewingWorldwide), users, 'the admin must see every real user regardless of the previewed view\'s own configured VBU scope')
+  assert.deepEqual(scopeCanonicalUsersByVbu(users, previewingUkAndIreland).map((u) => u._id), ['1'], 'previewing SSP UK & Ireland must show ONLY UK & Ireland\'s configured VBU data, per the Dashboard View + VBU Data Assignment spec')
+})
+
+test('a local admin with NO active preview (isPreviewingVbu: false — no selection yet, or previewing an unconfigured view like SSP Central Services before any VBU is assigned) still sees every VBU\'s users — "no accidental restriction merely by being logged in as local admin"', () => {
+  const noActivePreview = { canWrite: true, isPreviewingVbu: false, vbu: null, allowedVbus: null }
+  const users = [
+    { _id: '1', vbu: 'VBU - SSP UK & Ireland' },
+    { _id: '2', vbu: 'VBU - SSP Worldwide' }
+  ]
+  assert.deepEqual(scopeCanonicalUsersByVbu(users, noActivePreview), users)
+})
+
+test('a real Microsoft-authenticated admin (RBAC canWrite via role_group_mappings, isPreviewingVbu structurally never set) always sees every VBU\'s users — unaffected by the preview-scoping change, exactly as before', () => {
+  const realMicrosoftAdmin = { canWrite: true, vbu: 'VBU - SSP UK & Ireland' }
+  const users = [
+    { _id: '1', vbu: 'VBU - SSP UK & Ireland' },
+    { _id: '2', vbu: 'VBU - SSP Worldwide' }
+  ]
+  assert.deepEqual(scopeCanonicalUsersByVbu(users, realMicrosoftAdmin), users)
 })
 
 test('belongsToVbu matches trimmed and case-insensitively, never for a blank caller vbu', () => {
@@ -190,17 +217,17 @@ test('scopeApplicationDetailDevices narrows only the devices list, leaves summar
 // working identically via the legacy-shape fallback — these tests instead
 // exercise the richer, multi-VBU shape directly.
 
-test('scopeCanonicalUsersByVbu: a local admin previewing SSP Central Services (configured with multiple VBUs) sees EVERY user, not just the union of the configured VBUs — canWrite:true always bypasses, isPreviewingVbu no longer matters', () => {
+test('BUG 2 regression: a local admin previewing SSP Central Services configured with SEVERAL VBUs sees exactly the UNION of those configured VBUs, never every user in the company', () => {
   const centralServicesPreview = { canWrite: true, isPreviewingVbu: true, allowedVbus: ['VBU - SSP Operations', 'VBU - SSP Consolidated'] }
   const users = [
     { _id: '1', vbu: 'VBU - SSP Operations' },
     { _id: '2', vbu: 'VBU - SSP Consolidated' },
     { _id: '3', vbu: 'VBU - SSP Worldwide' }
   ]
-  assert.deepEqual(scopeCanonicalUsersByVbu(users, centralServicesPreview), users)
+  assert.deepEqual(scopeCanonicalUsersByVbu(users, centralServicesPreview).map((u) => u._id).sort(), ['1', '2'], 'a multi-VBU preview must show exactly the configured union, per TEST E of the Dashboard View + VBU Data Assignment spec')
 })
 
-test('scopeCanonicalUsersByVbu: the underlying multi-VBU union mechanism (belongsToAnyVbu) is still correct in isolation for a hypothetical non-admin multi-VBU caller — real admin sessions never reach this path any more (always bypassed above), but the mechanism itself remains available/correct for any future non-admin use', () => {
+test('scopeCanonicalUsersByVbu: the underlying multi-VBU union mechanism (belongsToAnyVbu) is correct for a non-admin multi-VBU caller too (the same mechanism a previewing admin and a hypothetical non-admin both go through)', () => {
   const hypotheticalMultiVbuNonAdmin = { canWrite: false, allowedVbus: ['VBU - SSP Operations', 'VBU - SSP Consolidated'] }
   const users = [
     { _id: '1', vbu: 'VBU - SSP Operations' },

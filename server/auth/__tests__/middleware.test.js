@@ -19,7 +19,7 @@ const tmpDbPath = path.join(os.tmpdir(), `middleware-test-${Date.now()}.sqlite`)
 process.env.DATABASE_URL = `file:${tmpDbPath}`
 
 const { initDb } = await import('../../db/index.js')
-const { requireAuth, requirePage, requireWrite } = await import('../middleware.js')
+const { requireAuth, requirePage, requireWrite, getOrRefreshAccess } = await import('../middleware.js')
 
 before(async () => { await initDb() })
 after(() => { try { fs.unlinkSync(tmpDbPath) } catch (e) {} })
@@ -129,4 +129,47 @@ test('requireWrite: unauthenticated request (no session) still 401s, never reach
   await requireWrite(req, res, () => { called = true })
   assert.equal(res.statusCode, 401)
   assert.equal(called, false)
+})
+
+// ---- getOrRefreshAccess (real Access Denied bug regression) ----
+// A real, live-confirmed bug: server/auth/routes.js's GET /api/auth/me used
+// to fall back to a hardcoded EMPTY access object whenever
+// req.session.access was merely missing — indistinguishable, in the
+// browser, from a genuine "not authorized" result. req.session.access goes
+// missing on every server restart (server/auth/sqliteSessionStore.js#
+// invalidateAllCachedAccess, by design), and /api/auth/me is very often the
+// very first request after one (it's the frontend's own boot-time check) —
+// an already-authorized user whose first post-restart request happened to
+// be /api/auth/me got stuck on a permanent, incorrect "Access Denied,"
+// confirmed live: a real admin session's cached access was cleared by a
+// restart, and /api/auth/me never recomputed it. getOrRefreshAccess is the
+// fix: the ONE recompute-or-reuse-cache function every protected route
+// (including /api/auth/me now) shares.
+
+test('getOrRefreshAccess: session with NO cached access at all (simulates invalidateAllCachedAccess having just run) recomputes it fresh via computeEffectiveAccess, rather than staying empty', async () => {
+  // A local-admin identity resolves synchronously with no Graph/network
+  // dependency (server/auth/authorize.js), so this exercises the exact
+  // same "access is missing -> recompute" path a real Microsoft user hits,
+  // without needing a live Microsoft 365 connection.
+  const req = { session: { user: { username: 'admin', name: 'admin', authenticationProvider: 'local' } } }
+  assert.equal(req.session.access, undefined, 'sanity: no cached access present, exactly like a session invalidateAllCachedAccess just touched')
+  const access = await getOrRefreshAccess(req)
+  assert.equal(access.canWrite, true, 'must recompute REAL access, never the old hardcoded empty fallback')
+  assert.ok(access.allowedPages.length > 0)
+  assert.equal(req.session.access, access, 'the recomputed access must be written back to the session, so it self-heals — the exact thing the old /api/auth/me fallback never did')
+})
+
+test('getOrRefreshAccess: a fresh, not-yet-expired cached access is reused as-is, never recomputed', async () => {
+  const cached = { role: 'admin', allowedPages: ['dashboard'], canWrite: true, computedAt: Date.now() }
+  const req = { session: { user: { username: 'admin', authenticationProvider: 'local' }, access: cached } }
+  const access = await getOrRefreshAccess(req)
+  assert.equal(access, cached, 'must reuse the exact same cached object, not recompute needlessly on every call')
+})
+
+test('getOrRefreshAccess: an expired cached access (older than the 15-minute refresh window) is recomputed, not reused', async () => {
+  const stale = { role: 'admin', allowedPages: ['dashboard'], canWrite: true, computedAt: Date.now() - 16 * 60 * 1000 }
+  const req = { session: { user: { username: 'admin', authenticationProvider: 'local' }, access: stale } }
+  const access = await getOrRefreshAccess(req)
+  assert.notEqual(access, stale, 'a stale cache must be recomputed, not returned as-is')
+  assert.equal(access.canWrite, true)
 })

@@ -1,22 +1,33 @@
-// Regression coverage for a real, live-confirmed production bug: an ADMIN
-// (local administrator, canWrite:true) previewing a Dashboard View lost
-// access to GET /api/users/:id/detail for real users outside that view's
-// configured VBU scope — e.g. previewing SSP Worldwide alone made 153 of
-// 296 real canonical users inaccessible, purely because of which
-// Dashboard View happened to be selected for branding at that moment.
+// History of this file (both directions are load-bearing, read both):
 //
-// Root cause: server/auth/vbuScope.js#isAdminAccess required
-// `!access.isPreviewingVbu` in addition to `canWrite`, so a previewing
-// admin session was treated as a real, VBU-scoped non-admin by every
-// scoping function (scopeCanonicalUsersByVbu, costAnalytics.userDetail's
-// own upstream buildCostDataset, etc.) — the exact same code path GET
-// /api/users/:id/detail (server/index.js) uses.
+// 1. An earlier design required `!access.isPreviewingVbu` in addition to
+//    `canWrite` in server/auth/vbuScope.js#isAdminAccess, on the theory
+//    that a previewing admin's business DATA should look scoped to the
+//    previewed VBU. In practice, at the time, ANY Dashboard View selection
+//    (even one picked only to look at branding) silently restricted a real
+//    admin's ability to look up unrelated users — live-confirmed:
+//    previewing SSP Worldwide alone made 153 of 296 real canonical users
+//    inaccessible from GET /api/users/:id/detail.
+// 2. The fix at the time was `isAdminAccess = !!access?.canWrite` alone —
+//    Dashboard View preview stopped affecting business-data access at all.
+// 3. The Dashboard View + VBU Data Assignment spec (Bug 2 of that
+//    investigation) explicitly requires the OPPOSITE for an EXPLICIT local-
+//    admin preview: "when an Admin explicitly previews/selects a Dashboard
+//    View, the preview context should still use that Dashboard View's
+//    configured VBU scope for BUSINESS DATA... Do NOT interpret isAdmin ==
+//    true as ignore selected Dashboard View data scope." isAdminAccess is
+//    now `!!access?.canWrite && !access?.isPreviewingVbu` again.
 //
-// Fix: isAdminAccess is now `!!access?.canWrite` alone — Dashboard View
-// preview/selection only ever affects branding (dashboardView/
-// effectiveAllowedPages), never an admin's own business-data
-// authorization. Uses the same real-temp-SQLite-DB pattern as
-// server/services/__tests__/costAnalytics.test.js.
+// The two "bugs" are not actually in tension once the real distinction is
+// drawn precisely: isPreviewingVbu is ONLY ever set by
+// server/services/dashboardViews.js#applyLocalAdminPreview, and ONLY when
+// the selected view has a REAL, non-empty configured VBU scope — i.e. only
+// on a genuine, explicit "preview this view's data scope" action, never as
+// a side effect of merely being logged in as local admin or previewing an
+// unconfigured view. RBAC (canWrite/allowedPages) and the ability to
+// manage/preview Dashboard Views themselves are untouched either way —
+// requireWrite/requireAdminAccess (server/auth/middleware.js) read
+// access.canWrite directly, never isAdminAccess.
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'fs'
@@ -71,32 +82,41 @@ test('admin, NOT previewing any view: detail works for every real user regardles
   assert.ok(detailFor('consolidated@ssp-worldwide.com', admin))
 })
 
-test('THE BUG, regression-locked: admin previewing SSP Worldwide (a single-VBU view) must still be able to open detail for a UK & Ireland user and a Consolidated user — not just Worldwide\'s own', () => {
+test('BUG 2 fix: admin previewing SSP Worldwide (a single-VBU view) can open detail ONLY for the Worldwide user — a UK & Ireland/Consolidated user correctly 404s while this preview is active', () => {
   const previewingWorldwide = { canWrite: true, isPreviewingVbu: true, vbu: 'VBU - SSP Worldwide', allowedVbus: ['VBU - SSP Worldwide'] }
-  assert.ok(detailFor('uki@ssp-worldwide.com', previewingWorldwide), 'UK & Ireland user must NOT 404 just because SSP Worldwide is the currently-previewed view')
-  assert.ok(detailFor('ww@ssp-worldwide.com', previewingWorldwide))
-  assert.ok(detailFor('consolidated@ssp-worldwide.com', previewingWorldwide), 'Consolidated user must NOT 404 either')
+  assert.equal(detailFor('uki@ssp-worldwide.com', previewingWorldwide), null, 'UK & Ireland user must 404 while SSP Worldwide is the explicitly previewed, VBU-scoped view — this is the whole point of the preview')
+  assert.ok(detailFor('ww@ssp-worldwide.com', previewingWorldwide), 'the previewed view\'s OWN VBU must still resolve')
+  assert.equal(detailFor('consolidated@ssp-worldwide.com', previewingWorldwide), null)
 })
 
-test('admin previewing a Central-Services-like view configured with only TWO of the three real VBUs must still open detail for the third (unconfigured) VBU\'s user', () => {
+test('admin previewing a Central-Services-like view configured with only TWO of the three real VBUs cannot open detail for the third (unconfigured) VBU\'s user — matches "no accidental ALL_VBUS leakage unless explicitly configured"', () => {
   const previewingPartialCentralServices = { canWrite: true, isPreviewingVbu: true, allowedVbus: ['VBU - SSP UK & Ireland', 'VBU - SSP Worldwide'] }
-  assert.ok(detailFor('consolidated@ssp-worldwide.com', previewingPartialCentralServices), 'an admin must never lose access to a real user just because an administrator has not yet added their VBU to a Dashboard View\'s configured list')
+  assert.ok(detailFor('uki@ssp-worldwide.com', previewingPartialCentralServices))
+  assert.ok(detailFor('ww@ssp-worldwide.com', previewingPartialCentralServices))
+  assert.equal(detailFor('consolidated@ssp-worldwide.com', previewingPartialCentralServices), null, 'a VBU not in the preview\'s configured scope must not be reachable, even for an admin, while the preview is active')
 })
 
-test('security boundary intact: a REAL non-admin (own VBU only) is still correctly denied a different VBU\'s user detail — this fix only changes ADMIN behavior', () => {
+test('the preview restriction is reversible: clearing the preview (isPreviewingVbu: false again) immediately restores full admin access to every user — matches "Switch Dashboard View" never being a permanent narrowing', () => {
+  const noLongerPreviewing = { canWrite: true, isPreviewingVbu: false, vbu: null, allowedVbus: null }
+  assert.ok(detailFor('uki@ssp-worldwide.com', noLongerPreviewing))
+  assert.ok(detailFor('ww@ssp-worldwide.com', noLongerPreviewing))
+  assert.ok(detailFor('consolidated@ssp-worldwide.com', noLongerPreviewing))
+})
+
+test('security boundary intact: a REAL non-admin (own VBU only) is still correctly denied a different VBU\'s user detail — unaffected by any of the admin-preview behavior above', () => {
   const ukiNonAdmin = { canWrite: false, vbu: 'VBU - SSP UK & Ireland', allowedVbus: ['VBU - SSP UK & Ireland'] }
   assert.ok(detailFor('uki@ssp-worldwide.com', ukiNonAdmin), 'must still see their own VBU\'s user')
   assert.equal(detailFor('ww@ssp-worldwide.com', ukiNonAdmin), null, 'must still be denied a different VBU\'s user — unchanged, correct behavior')
   assert.equal(detailFor('consolidated@ssp-worldwide.com', ukiNonAdmin), null)
 })
 
-test('a non-admin cannot bypass their own VBU boundary by spoofing isPreviewingVbu/canWrite-shaped fields — only a real canWrite:true session bypasses', () => {
+test('a non-admin cannot bypass their own VBU boundary by spoofing isPreviewingVbu/canWrite-shaped fields — only a real canWrite:true session bypasses anything', () => {
   const spoofed = { canWrite: false, vbu: 'VBU - SSP UK & Ireland', isPreviewingVbu: false, allowedVbus: ['VBU - SSP UK & Ireland', 'VBU - SSP Worldwide', 'VBU - SSP Consolidated'] }
   // Even if allowedVbus is somehow widened (which no real code path allows
   // a non-admin to do — computeAllowedVbusForUser never returns more than
   // the user's own single vbu), canWrite:false alone does NOT grant the
   // admin bypass; scoping still applies using whatever allowedVbus says.
-  // This test exists to prove canWrite is genuinely load-bearing, not
-  // merely decorative, in isAdminAccess.
-  assert.equal(detailFor('ww@ssp-worldwide.com', { canWrite: false, vbu: 'VBU - SSP UK & Ireland' }), null, 'without canWrite, a caller with only their own real vbu is still denied a different VBU\'s user')
+  assert.ok(detailFor('uki@ssp-worldwide.com', spoofed))
+  assert.ok(detailFor('ww@ssp-worldwide.com', spoofed), 'a widened allowedVbus (never producible by real code) would still be honored — this test documents that canWrite, not allowedVbus width, is the real admin bypass gate')
+  assert.equal(detailFor('ww@ssp-worldwide.com', { canWrite: false, vbu: 'VBU - SSP UK & Ireland' }), null, 'without canWrite, and without a widened allowedVbus, a caller with only their own real vbu is still denied a different VBU\'s user')
 })

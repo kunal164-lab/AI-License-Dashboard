@@ -21,6 +21,17 @@ const dashboardViewsRepo = await import('../../repositories/dashboardViewsRepo.j
 const vbuViewAssignmentsRepo = await import('../../repositories/vbuViewAssignmentsRepo.js')
 const dashboardViews = await import('../dashboardViews.js')
 
+// resolveDashboardView now resolves entirely from a view's own
+// allowedVbuIds (VBU-scoping bug fix — see resolveDashboardView's own
+// comment for why the old, separate vbu_view_assignments table was retired
+// as a resolution mechanism). This helper lets the tests below express "map
+// this VBU to this view" the same way an administrator does through the
+// admin UI's "VBU Data" checkboxes, without reaching into the retired repo.
+function assignVbuToView(vbu, viewId) {
+  const view = dashboardViewsRepo.getView(viewId)
+  dashboardViewsRepo.updateView(viewId, { allowedVbuIds: [...(view.allowedVbuIds || []), vbu] })
+}
+
 function graphUser({ id, displayName, upn, vbu }) {
   return {
     id, displayName, userPrincipalName: upn, mail: upn, companyName: 'SSP', accountEnabled: true,
@@ -342,15 +353,16 @@ test('applyLocalAdminPreview: an unknown or inactive view id returns null (calle
   assert.equal(dashboardViews.applyLocalAdminPreview('SSP_WORLDWIDE', baseAccess), null)
 })
 
-test('VBU resolves to the correct assigned dashboard view for each of the three initial views', () => {
+test('VBU resolves to the correct view for each of the three initial views, purely from allowedVbuIds', () => {
   dashboardViews.seedDefaultDashboardViews()
-  vbuViewAssignmentsRepo.createAssignment({ vbu: 'SSP Worldwide', dashboardViewId: 'SSP_WORLDWIDE' })
-  vbuViewAssignmentsRepo.createAssignment({ vbu: 'SSP UK & I', dashboardViewId: 'SSP_UK_I' })
+  assignVbuToView('SSP Worldwide', 'SSP_WORLDWIDE')
+  assignVbuToView('SSP UK & I', 'SSP_UK_I')
 
   assert.equal(dashboardViews.resolveDashboardView('SSP Worldwide').id, 'SSP_WORLDWIDE')
   assert.equal(dashboardViews.resolveDashboardView('SSP UK & I').id, 'SSP_UK_I')
-  // A VBU with no assignment falls back to the built-in SSP view — the
-  // "Current SSP Dashboard" experience the spec establishes as the default.
+  // A VBU claimed by no view's allowedVbuIds falls back to the built-in SSP
+  // view — the "Current SSP Dashboard" experience the spec establishes as
+  // the default.
   assert.equal(dashboardViews.resolveDashboardView('Some Other VBU').id, 'SSP')
   assert.equal(dashboardViews.resolveDashboardView(null).id, 'SSP')
 })
@@ -361,11 +373,10 @@ test('an unknown/unmapped VBU has a safe fallback — never throws, never return
   assert.equal(view.id, 'SSP')
 })
 
-test('a deactivated assigned view falls back to the default SSP view rather than being served', () => {
+test('a deactivated view is never resolved, even if its allowedVbuIds still claims the VBU — falls back to the default SSP view', () => {
   dashboardViews.seedDefaultDashboardViews()
-  const { view: custom } = dashboardViewsRepo.createView({ displayName: 'Custom View', pages: ['dashboard'] })
+  const { view: custom } = dashboardViewsRepo.createView({ displayName: 'Custom View', pages: ['dashboard'], allowedVbuIds: ['Deactivated VBU'] })
   dashboardViewsRepo.updateView(custom.id, { isActive: false })
-  vbuViewAssignmentsRepo.createAssignment({ vbu: 'Deactivated VBU', dashboardViewId: custom.id })
   assert.equal(dashboardViews.resolveDashboardView('Deactivated VBU').id, 'SSP')
 })
 
@@ -377,13 +388,73 @@ test('missing configuration entirely (no seeded views at all) falls back to the 
   assert.ok(Array.isArray(view.pages) && view.pages.length > 0, 'the hardcoded fallback must still grant a real, non-empty page list')
 })
 
-test('logo and theme resolve from the assigned view\'s own configuration', () => {
+test('logo and theme resolve from the resolved view\'s own configuration', () => {
   dashboardViews.seedDefaultDashboardViews()
   dashboardViewsRepo.updateView('SSP_UK_I', { logoKey: 'ssp_uk_i', theme: { accent: '#ff0000' } })
-  vbuViewAssignmentsRepo.createAssignment({ vbu: 'SSP UK & I', dashboardViewId: 'SSP_UK_I' })
+  assignVbuToView('SSP UK & I', 'SSP_UK_I')
   const publicConfig = dashboardViews.toPublicViewConfig(dashboardViews.resolveDashboardView('SSP UK & I'))
   assert.equal(publicConfig.logoKey, 'ssp_uk_i')
   assert.deepEqual(publicConfig.theme, { accent: '#ff0000' })
+})
+
+// ---- Bug 1 regression: the old two-mechanism split (a separate
+// vbu_view_assignments table for branding vs. allowedVbuIds for data scope)
+// ----
+
+test('BUG 1 regression: configuring a view\'s allowedVbuIds (the ONLY thing the admin UI exposes now) is sufficient on its own for that VBU\'s users to resolve to it — no separate "assignment" step exists or is needed', () => {
+  dashboardViews.seedDefaultDashboardViews()
+  // This is deliberately the ONLY configuration step — exactly what an
+  // administrator does through the "VBU Data" checkboxes in AdminDashboardViews.jsx.
+  dashboardViewsRepo.updateView('SSP_UK_I', { allowedVbuIds: ['VBU - SSP Consolidated'] })
+  const resolved = dashboardViews.resolveDashboardView('VBU - SSP Consolidated')
+  assert.equal(resolved.id, 'SSP_UK_I', 'configuring allowedVbuIds alone must be enough for branding resolution to pick up the new VBU — this is the exact bug: previously a separate vbu_view_assignments row was ALSO required')
+})
+
+test('migrateVbuAssignmentsIntoAllowedVbuIds merges a pre-existing legacy assignment into its view\'s allowedVbuIds, additively and idempotently', () => {
+  dashboardViews.seedDefaultDashboardViews()
+  vbuViewAssignmentsRepo.createAssignment({ vbu: 'VBU - Legacy Assigned', dashboardViewId: 'SSP_UK_I' })
+  assert.equal(dashboardViewsRepo.getView('SSP_UK_I').allowedVbuIds.length, 0, 'sanity check: the legacy assignment alone does not yet touch allowedVbuIds')
+
+  dashboardViews.migrateVbuAssignmentsIntoAllowedVbuIds()
+  assert.deepEqual(dashboardViewsRepo.getView('SSP_UK_I').allowedVbuIds, ['VBU - Legacy Assigned'])
+  assert.equal(dashboardViews.resolveDashboardView('VBU - Legacy Assigned').id, 'SSP_UK_I')
+
+  // Idempotent: running it again must not duplicate the entry.
+  dashboardViews.migrateVbuAssignmentsIntoAllowedVbuIds()
+  assert.deepEqual(dashboardViewsRepo.getView('SSP_UK_I').allowedVbuIds, ['VBU - Legacy Assigned'])
+})
+
+test('migrateVbuAssignmentsIntoAllowedVbuIds never removes a VBU an administrator already configured directly on a different view', () => {
+  dashboardViews.seedDefaultDashboardViews()
+  dashboardViewsRepo.updateView('SSP_WORLDWIDE', { allowedVbuIds: ['VBU - Already Configured'] })
+  dashboardViews.migrateVbuAssignmentsIntoAllowedVbuIds()
+  assert.deepEqual(dashboardViewsRepo.getView('SSP_WORLDWIDE').allowedVbuIds, ['VBU - Already Configured'])
+})
+
+// Discovered live against the real production database while building this
+// fix: SSP Central Services (the default/fallback view) already has its
+// OWN allowedVbuIds configured with several VBUs — including ones ALSO
+// claimed by SSP UK & Ireland/Worldwide — purely to give the admin
+// catch-all view a broader business-data aggregate. If resolveDashboardView
+// searched every active view (default included) it would pick whichever
+// view sorts first (built-ins alphabetically: "SSP Central Services" sorts
+// before "SSP UK & Ireland"/"SSP Worldwide"), silently rerouting real UK &
+// Ireland/Worldwide users' BRANDING to Central Services the moment an
+// administrator broadened its data-scope checkboxes — a real regression
+// this exact live-data shape would have caused.
+test('the DEFAULT view (SSP Central Services) never wins a branding claim over a more specific view, even when its OWN allowedVbuIds also includes that VBU (configured for a broader data-scope aggregate, not a branding claim)', () => {
+  dashboardViews.seedDefaultDashboardViews()
+  assignVbuToView('VBU - SSP UK & Ireland', 'SSP_UK_I')
+  assignVbuToView('VBU - SSP Worldwide', 'SSP_WORLDWIDE')
+  // The admin catch-all view is ALSO configured with these same two VBUs,
+  // for its own broader aggregate — exactly the real, live database shape.
+  dashboardViewsRepo.updateView('SSP', { allowedVbuIds: ['VBU - SSP UK & Ireland', 'VBU - SSP Worldwide', 'VBU - Some Other VBU'] })
+
+  assert.equal(dashboardViews.resolveDashboardView('VBU - SSP UK & Ireland').id, 'SSP_UK_I', 'a real UK & Ireland user must still see UK & Ireland branding, not Central Services')
+  assert.equal(dashboardViews.resolveDashboardView('VBU - SSP Worldwide').id, 'SSP_WORLDWIDE', 'a real Worldwide user must still see Worldwide branding, not Central Services')
+  // A VBU claimed ONLY by the default view (never by a more specific one)
+  // still correctly resolves to it.
+  assert.equal(dashboardViews.resolveDashboardView('VBU - Some Other VBU').id, 'SSP')
 })
 
 test('toPublicViewConfig never exposes dashboard_json (not yet consumed client-side)', () => {

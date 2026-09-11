@@ -91,6 +91,17 @@ rolesRepo.migrateLegacyRoleMappings()
 // unchanged until an administrator explicitly configures one.
 dashboardViewsService.seedDefaultDashboardViews()
 
+// One-time (idempotent — safe on every startup): merges any VBU that was
+// only ever configured through the old, separate "VBU Assignments" admin
+// screen into its dashboard view's own allowedVbuIds — the VBU-scoping bug
+// investigation found these were two independent, easily-desynced
+// mechanisms (an administrator could configure a view's "VBU Data" without
+// this ever taking effect, or vice versa); resolveDashboardView below now
+// resolves entirely from allowedVbuIds, so this merge is what preserves any
+// pre-existing assignment before that admin screen was retired — see
+// server/services/dashboardViews.js#migrateVbuAssignmentsIntoAllowedVbuIds.
+dashboardViewsService.migrateVbuAssignmentsIntoAllowedVbuIds()
+
 // One-time (idempotent — safe on every startup, and never overwrites an
 // administrator's own later edit): applies the real, approved SSP UK &
 // Ireland branding (logo/theme) and its VBU assignment — see
@@ -541,6 +552,14 @@ app.get('/api/connections', requirePage('data-sources'), (req, res) => {
       safe.capabilities = c.meta.capabilities || ['copilot']
       safe.capabilityStatus = buildCapabilityStatus(c.id, safe.capabilities)
     }
+    // VBU-scoping audit finding: `stats` (users/records) is a company-wide
+    // aggregate computed at sync/import time, with no VBU dimension —
+    // recomputing a genuinely per-VBU count here would need a per-source-
+    // type-aware record fetch (each source stores records in a different
+    // shape/table). Rather than build that just to expose a number, fail
+    // closed for a scoped caller (never fail open) — an admin (unscoped)
+    // sees exactly what they see today.
+    if (!isAdminAccess(req.access)) delete safe.stats
     return safe
   })
   res.json({ connections: list })
@@ -1010,10 +1029,24 @@ app.post('/api/kiro/import-csv', requireWrite, (req, res) => {
 // credentials) plus plain operational numbers — no password, token, or
 // stack trace ever reaches the frontend.
 // ---------------------------------------------------------------------------
-function claudeStatusPayload() {
+// recordCount/uniqueUserCount are derived from the SAME scoped record set
+// GET /api/claude/data already returns (VBU-scoping audit finding) — this
+// used to read conn.stats.records/.users directly, a company-wide aggregate
+// computed at sync/import time with no VBU dimension at all, so a
+// VBU-scoped Claude-page user saw everyone's totals regardless of their own
+// access. `access` is required so an admin (unscoped, unchanged from
+// before) and a scoped caller (now genuinely narrowed) both get a count
+// that matches what GET /api/claude/data would actually show them.
+function claudeStatusPayload(access) {
   const conn = connectionsRepo.listConnections('Claude').find((c) => c.kind === 'api')
   if (!conn) return { configured: false }
   const snapshot = claudeRepo.latestSnapshot(conn.id)
+  const directory = buildMicrosoftDirectory(msRepo.listAllUsers())
+  const scopedRecords = scopeRecordsByVbu(
+    claudeRepo.currentRecords(conn.id).map((r) => ({ ...r, email: r.user_email })),
+    directory,
+    access
+  )
   return {
     configured: true,
     connection: connectionsRepo.toSafeView(conn),
@@ -1021,8 +1054,8 @@ function claudeStatusPayload() {
     reportingType: 'MTD Snapshot',
     lastChecked: conn.lastAttempt || null,
     lastSuccessfulSync: conn.lastSync || null,
-    recordCount: conn.stats?.records ?? 0,
-    uniqueUserCount: conn.stats?.users ?? 0,
+    recordCount: scopedRecords.length,
+    uniqueUserCount: new Set(scopedRecords.map((r) => r.email).filter(Boolean)).size,
     lastSnapshotStatus: snapshot?.status || 'never_synced',
     lastError: conn.lastError || null,
     // Whether a share-link password is currently stored — NEVER the value
@@ -1032,8 +1065,8 @@ function claudeStatusPayload() {
   }
 }
 
-app.get('/api/claude/source', requirePage('claude'), (req, res) => res.json(claudeStatusPayload()))
-app.get('/api/claude/status', requirePage('claude'), (req, res) => res.json(claudeStatusPayload()))
+app.get('/api/claude/source', requirePage('claude'), (req, res) => res.json(claudeStatusPayload(req.access)))
+app.get('/api/claude/status', requirePage('claude'), (req, res) => res.json(claudeStatusPayload(req.access)))
 
 // Share-link password setup (Part 3 of the spec this implements) — the
 // ONLY thing this route ever returns is a plain success/failure; the
@@ -1053,11 +1086,25 @@ app.post('/api/claude/password', requireWrite, (req, res) => {
 app.get('/api/claude/snapshots', requirePage('claude'), (req, res) => {
   const conn = connectionsRepo.listConnections('Claude').find((c) => c.kind === 'api')
   if (!conn) return res.json({ snapshots: [] })
-  const snapshots = claudeRepo.listSnapshots(conn.id).map((s) => ({
-    id: s.id, snapshotImportedAt: s.snapshot_imported_at, reportingType: s.reporting_type,
-    recordCount: s.record_count, uniqueUserCount: s.unique_user_count, status: s.status,
-    errorMessage: s.error_message, createdAt: s.created_at
-  }))
+  // recordCount/uniqueUserCount are recomputed from each snapshot's own
+  // records, scoped the same way claudeStatusPayload above is (VBU-scoping
+  // audit finding) — s.record_count/s.unique_user_count are the company-wide
+  // totals stored at import time, with no VBU dimension at all. Matches an
+  // admin's view exactly (scopeRecordsByVbu is a no-op for isAdminAccess),
+  // genuinely narrows for a VBU-scoped caller.
+  const directory = buildMicrosoftDirectory(msRepo.listAllUsers())
+  const snapshots = claudeRepo.listSnapshots(conn.id).map((s) => {
+    const scoped = scopeRecordsByVbu(
+      claudeRepo.recordsForSnapshot(s.id).map((r) => ({ ...r, email: r.user_email })),
+      directory,
+      req.access
+    )
+    return {
+      id: s.id, snapshotImportedAt: s.snapshot_imported_at, reportingType: s.reporting_type,
+      recordCount: scoped.length, uniqueUserCount: new Set(scoped.map((r) => r.email).filter(Boolean)).size, status: s.status,
+      errorMessage: s.error_message, createdAt: s.created_at
+    }
+  })
   res.json({ snapshots })
 })
 

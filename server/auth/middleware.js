@@ -18,21 +18,42 @@ import * as auditLogRepo from '../repositories/auditLogRepo.js'
 // stale, and always fresh again on their next login.
 const ACCESS_REFRESH_MS = 15 * 60 * 1000
 
+// The one place a session's cached `access` is read-or-recomputed —
+// factored out of withAuth below so GET /api/auth/me (server/auth/routes.js)
+// can use the exact same logic instead of its own fallback. Bug found while
+// investigating a real Access Denied report: /api/auth/me used to fall back
+// to a hardcoded EMPTY access object whenever `req.session.access` was
+// missing, rather than recomputing it — indistinguishable, to the user,
+// from a genuine "not authorized" result. `req.session.access` goes missing
+// any time server/auth/sqliteSessionStore.js#invalidateAllCachedAccess runs
+// (every server restart/redeploy, by design — see its own comment: "every
+// session's very next request recomputes it fresh"), and /api/auth/me is
+// very often that very next request (it's the frontend's own boot-time
+// check, called before any other protected route). A user whose FIRST
+// request after any restart happened to be /api/auth/me would see "Access
+// Denied" — permanently, since /api/auth/me never writes the real access
+// back to the session, so it never self-heals — despite having perfectly
+// valid, unchanged RBAC access the whole time.
+export async function getOrRefreshAccess(req) {
+  let access = req.session.access
+  if (!access || Date.now() - (access.computedAt || 0) > ACCESS_REFRESH_MS) {
+    // selectedDashboardViewId only ever exists for a local-admin session
+    // (server/auth/localRoutes.js's dashboard-view selection routes) —
+    // carrying it through the periodic refresh keeps a chosen preview
+    // alive across the same 15-minute cache window real RBAC already
+    // uses, until the admin clears it or logs out.
+    access = await computeEffectiveAccess(req.session.user, { selectedDashboardViewId: req.session.selectedDashboardViewId })
+    access.computedAt = Date.now()
+    req.session.access = access
+  }
+  return access
+}
+
 function withAuth(handler) {
   return async (req, res, next) => {
     if (!req.session?.user) return res.status(401).json({ error: 'Authentication required.' })
     try {
-      let access = req.session.access
-      if (!access || Date.now() - (access.computedAt || 0) > ACCESS_REFRESH_MS) {
-        // selectedDashboardViewId only ever exists for a local-admin
-        // session (server/auth/localRoutes.js's dashboard-view selection
-        // routes) — carrying it through the periodic refresh keeps a
-        // chosen preview alive across the same 15-minute cache window
-        // real RBAC already uses, until the admin clears it or logs out.
-        access = await computeEffectiveAccess(req.session.user, { selectedDashboardViewId: req.session.selectedDashboardViewId })
-        access.computedAt = Date.now()
-        req.session.access = access
-      }
+      const access = await getOrRefreshAccess(req)
       req.user = req.session.user
       req.access = access
       // Default-deny also covers a non-admin whose VBU cannot be resolved

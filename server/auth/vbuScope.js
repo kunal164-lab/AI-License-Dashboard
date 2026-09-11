@@ -39,45 +39,44 @@
 // defense-in-depth: fail closed (empty), never fail open, if a caller with
 // no accessible VBU somehow reaches this far.
 
-// `canWrite` ALONE is sufficient — an admin is globally unrestricted,
-// full stop, regardless of which Dashboard View they are currently
-// previewing/branded as (server/services/dashboardViews.js#
-// applyLocalAdminPreview). This is a deliberate reversal of an earlier
-// design (kept here as the historical record, since the mistake is
-// instructive): an earlier revision also required `!access.isPreviewingVbu`,
-// on the theory that a previewing admin's business DATA should look
-// scoped to the previewed VBU for QA/testing purposes. In practice that
-// meant an admin who selected ANY Dashboard View (including one an
-// administrator had only partially configured, or one intentionally
-// scoped to a single VBU like SSP Worldwide/SSP UK & Ireland) silently
-// lost access to every OTHER VBU's users/products/cost data — real,
-// existing people the admin is unquestionably authorized to inspect
-// started 404ing from Users/Products/Microsoft 365 detail views with no
-// obvious cause, purely because of which Dashboard View happened to be
-// selected for BRANDING purposes at that moment. Confirmed live against
-// production data: previewing SSP Worldwide alone made 153 of 296 real
-// canonical users inaccessible; previewing SSP UK & Ireland made 163
-// inaccessible — despite the admin never having done anything to revoke
-// their own authorization.
+// RBAC authorization (`canWrite`) and BUSINESS-DATA VBU scope are
+// different concepts (Dashboard View + VBU Data Assignment spec, "IMPORTANT
+// DISTINCTION"). `canWrite` alone governs Dashboard View PRESENTATION
+// (branding/theme/visible-pages — `dashboardView`/`effectiveAllowedPages`,
+// entirely untouched by this function) and every RBAC/management gate
+// (requireWrite/requireAdminAccess/requirePage in server/auth/middleware.js
+// all read `access.canWrite`/`access.allowedPages` directly, never this
+// function) — an admin's authorization to MANAGE/preview Dashboard Views is
+// never narrowed by anything below.
 //
-// The corrected invariant (this is the ONE function every scoping
-// function below funnels through, so this is the ONE place this needs to
-// be true): RBAC authorization (`canWrite`) and Dashboard View
-// PRESENTATION (branding/theme/visible-pages, still fully governed by
-// `dashboardView`/`effectiveAllowedPages` — completely untouched by this
-// change) are different concepts. An admin's own authorization is never
-// narrowed by which view they happen to be looking at. `isPreviewingVbu`/
-// `access.allowedVbus` are still computed and attached by
-// applyLocalAdminPreview (still used for the profile-menu's own VBU
-// display logic and available for any future non-security use), but no
-// longer gate real business-data access for an admin session — there is
-// no other kind of session `isPreviewingVbu` can ever be set on (it is
-// only ever set by applyLocalAdminPreview, which only ever runs for a
-// local-admin, always-canWrite:true identity — never reachable by, or
-// settable for, a real non-admin Microsoft-authenticated user), so this
-// change can never weaken a real non-admin's own VBU boundary.
+// For BUSINESS DATA specifically, an admin is globally unrestricted only
+// when they are not currently in an explicit VBU-scoped preview context.
+// `isPreviewingVbu` is the one signal that distinguishes "an admin,
+// browsing normally" from "an admin who has deliberately selected a
+// Dashboard View to preview it, and that view has a real configured VBU
+// scope" — it is computed exclusively by
+// server/services/dashboardViews.js#applyLocalAdminPreview, which itself
+// only ever runs for a local-admin session that has explicitly selected a
+// view (server/auth/localRoutes.js's dashboard-view selection route), and
+// only sets it true when the selected view's own allowedVbuIds is
+// non-empty. Concretely:
+//   - a real Microsoft-authenticated admin (RBAC via role_group_mappings)
+//     never has isPreviewingVbu set at all (structurally unreachable —
+//     applyLocalAdminPreview never runs for them) — always fully global,
+//     exactly like today.
+//   - a local admin with no selection yet, or previewing an unconfigured
+//     view (e.g. SSP Central Services before any VBU is assigned to it),
+//     has isPreviewingVbu: false — still fully global, matching "no
+//     accidental restriction merely by being logged in as local admin."
+//   - a local admin who explicitly selects a view with a real configured
+//     VBU scope (e.g. SSP UK & Ireland) has isPreviewingVbu: true — this
+//     is a deliberate preview/context restriction, not a change to the
+//     admin's RBAC permissions, so business data is scoped to that view's
+//     configured VBU(s) (`access.allowedVbus`) for as long as the preview
+//     is active, exactly as if inspecting that VBU's own data — reversible
+//     at any time via "Switch Dashboard View," never a permanent narrowing.
 export function isAdminAccess(access) {
-  return !!access?.canWrite
+  return !!access?.canWrite && !access?.isPreviewingVbu
 }
 
 function normalizeVbu(v) {

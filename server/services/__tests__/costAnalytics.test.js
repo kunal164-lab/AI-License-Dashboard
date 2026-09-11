@@ -74,31 +74,30 @@ test('Products/departments/domains/plans built from a scoped dataset never leak 
   assert.equal(byProduct.find((p) => p.name === 'Kiro')?.users, 1, 'only the caller\'s own VBU\'s Kiro user is counted')
 })
 
-// A local admin's business-data access is ALWAYS global (server/auth/
-// vbuScope.js#isAdminAccess: canWrite alone, isPreviewingVbu is no longer
-// consulted) — reversed from an earlier design that DID scope a
-// previewing admin's data, which caused a real, live-confirmed bug: an
-// admin previewing e.g. SSP Worldwide alone lost access to 153 of 296
-// real canonical users, purely because of which Dashboard View happened
-// to be selected for branding. These three tests now all assert the SAME
-// thing (every real user, regardless of which view is previewed) —
-// intentionally kept as three separate cases (no selection, single-VBU
-// preview, multi-VBU preview) since they were exactly the three
-// previously-differing scenarios.
+// BUG 2 regression (Dashboard View + VBU Data Assignment spec, "IMPORTANT
+// DISTINCTION"): when a local admin explicitly previews a Dashboard View
+// with a real configured VBU scope, business data must be scoped to that
+// view's configured VBU(s) — RBAC (canWrite, management/preview access to
+// Dashboard Views itself) is completely untouched, only the BUSINESS DATA
+// this specific request returns narrows. Only an active preview
+// (isPreviewingVbu: true) narrows anything; no selection yet, or
+// previewing an unconfigured view, stays fully global — see the isAdminAccess
+// tests in server/auth/__tests__/vbuScope.test.js for the underlying
+// mechanism this all funnels through.
 
-test('a local admin PREVIEWING SSP Worldwide still sees every VBU\'s canonical users — Dashboard View selection is branding only, never a business-data restriction for an admin', () => {
+test('a local admin PREVIEWING SSP Worldwide sees ONLY SSP Worldwide\'s canonical users — this is the exact reported bug ("select UK&I or Worldwide, data from other VBUs is still visible")', () => {
   const previewingWorldwide = { canWrite: true, isPreviewingVbu: true, vbu: 'VBU - SSP Worldwide', allowedVbus: ['VBU - SSP Worldwide'] }
   const { canonicalUsers } = costAnalytics.buildCostDataset(previewingWorldwide)
-  assert.deepEqual(canonicalUsers.map((u) => u.name).sort(), ['No VBU Person', 'UKI Person', 'Worldwide Person'])
+  assert.deepEqual(canonicalUsers.map((u) => u.name).sort(), ['Worldwide Person'])
 })
 
-test('a local admin previewing a Central-Services-like view configured with SEVERAL VBUs still sees every real canonical user, not just the union of the configured VBUs', () => {
+test('a local admin previewing a Central-Services-like view configured with SEVERAL VBUs sees exactly the union of those configured VBUs', () => {
   const previewingCentralServices = { canWrite: true, isPreviewingVbu: true, allowedVbus: ['VBU - SSP UK & Ireland', 'VBU - SSP Worldwide'] }
   const { canonicalUsers } = costAnalytics.buildCostDataset(previewingCentralServices)
-  assert.deepEqual(canonicalUsers.map((u) => u.name).sort(), ['No VBU Person', 'UKI Person', 'Worldwide Person'])
+  assert.deepEqual(canonicalUsers.map((u) => u.name).sort(), ['UKI Person', 'Worldwide Person'])
 })
 
-test('a local admin previewing SSP (no VBU assignment) sees everyone — the same as every other preview selection now', () => {
+test('a local admin with no active preview (previewing SSP Central Services before any VBU is configured on it, or no selection at all) sees everyone — "no accidental ALL_VBUS restriction" for the default/unconfigured case', () => {
   const previewingSsp = { canWrite: true, isPreviewingVbu: false, vbu: null }
   const { canonicalUsers } = costAnalytics.buildCostDataset(previewingSsp)
   assert.equal(canonicalUsers.length, 3)

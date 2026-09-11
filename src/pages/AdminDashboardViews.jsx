@@ -126,7 +126,7 @@ function ViewForm({ pages, vbus, initial, onSave, onCancel, saving }) {
 
         <div className="form-section-title">VBU Data</div>
         <div className="settings-row-help" style={{ marginBottom: 8 }}>
-          Which VBU(s) this Dashboard View is allowed to show data from — a data-scope restriction, separate from RBAC/page access. Leave everything unchecked to defer to each viewer's own VBU (today's default behavior, e.g. SSP UK &amp; Ireland only ever shows a UK &amp; Ireland user their own data regardless of this list). This can only ever NARROW what a user's own VBU authorization already allows, never widen it.
+          Which VBU(s) this Dashboard View belongs to — this is the ONE place that controls both (1) which VBU's users automatically land on this view after signing in, and (2) which VBU's business data this view can show. Leave everything unchecked to defer to each viewer's own VBU with no view routing (today's default behavior). A VBU can only ever belong to one Dashboard View at a time — if it's already checked on another view, remove it there first.
         </div>
         {vbus.length === 0 ? (
           <div className="muted small" style={{ marginBottom: 12 }}>No VBU values found yet in the synced Microsoft 365 directory.</div>
@@ -148,44 +148,6 @@ function ViewForm({ pages, vbus, initial, onSave, onCancel, saving }) {
           <button className="button secondary" onClick={onCancel} disabled={saving}><X size={14} /> Cancel</button>
           <button className="button primary" disabled={saving || !displayName.trim()} onClick={submit}>
             <Save size={14} /> {saving ? 'Saving...' : (initial ? 'Save View' : 'Create View')}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function AssignmentForm({ views, initial, onSave, onCancel, saving }) {
-  const [vbu, setVbu] = useState(initial?.vbu || '')
-  const [dashboardViewId, setDashboardViewId] = useState(initial?.dashboardViewId || views[0]?.id || '')
-
-  function submit() {
-    onSave({ vbu, dashboardViewId })
-  }
-
-  return (
-    <div className="card" style={{ marginTop: 12 }}>
-      <div className="settings-form" style={{ maxWidth: 480 }}>
-        <div className="settings-row">
-          <div className="settings-row-label">VBU</div>
-          <div className="settings-row-field">
-            <input value={vbu} onChange={(e) => setVbu(e.target.value)} placeholder="e.g. SSP Worldwide" disabled={!!initial} />
-            <div className="settings-row-help">Must match the VBU value on the Microsoft 365 directory record exactly (case-insensitive).</div>
-          </div>
-        </div>
-        <div className="settings-row">
-          <div className="settings-row-label">Dashboard View</div>
-          <div className="settings-row-field">
-            <select value={dashboardViewId} onChange={(e) => setDashboardViewId(e.target.value)}>
-              {views.map((v) => <option key={v.id} value={v.id}>{v.displayName}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <div className="form-actions">
-          <button className="button secondary" onClick={onCancel} disabled={saving}><X size={14} /> Cancel</button>
-          <button className="button primary" disabled={saving || !vbu.trim() || !dashboardViewId} onClick={submit}>
-            <Save size={14} /> {saving ? 'Saving...' : 'Save'}
           </button>
         </div>
       </div>
@@ -243,7 +205,6 @@ function ViewPreview({ view, pageLabelByKey }) {
 export default function AdminDashboardViews({ navigate }) {
   const [pages, setPages] = useState([])
   const [views, setViews] = useState([])
-  const [assignments, setAssignments] = useState([])
   const [vbus, setVbus] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -252,22 +213,16 @@ export default function AdminDashboardViews({ navigate }) {
   const [savingView, setSavingView] = useState(false)
   const [previewViewId, setPreviewViewId] = useState(null)
 
-  const [showAssignmentForm, setShowAssignmentForm] = useState(false)
-  const [editingAssignment, setEditingAssignment] = useState(null)
-  const [savingAssignment, setSavingAssignment] = useState(false)
-
   async function loadAll() {
     setLoading(true)
     try {
-      const [pagesRes, viewsRes, assignmentsRes, vbusRes] = await Promise.all([
+      const [pagesRes, viewsRes, vbusRes] = await Promise.all([
         fetch('/api/admin/access/pages').then((r) => r.json()),
         fetch('/api/admin/dashboard-views').then((r) => r.json()),
-        fetch('/api/admin/dashboard-views/vbu-assignments').then((r) => r.json()),
         fetch('/api/admin/dashboard-views/vbus').then((r) => r.json())
       ])
       setPages(pagesRes.pages || [])
       setViews(viewsRes.views || [])
-      setAssignments(assignmentsRes.assignments || [])
       setVbus(vbusRes.vbus || [])
     } finally {
       setLoading(false)
@@ -302,33 +257,7 @@ export default function AdminDashboardViews({ navigate }) {
     await loadAll()
   }
 
-  async function saveAssignment(form) {
-    setSavingAssignment(true)
-    try {
-      const isEdit = !!editingAssignment
-      const url = isEdit ? `/api/admin/dashboard-views/vbu-assignments/${editingAssignment.id}` : '/api/admin/dashboard-views/vbu-assignments'
-      const method = isEdit ? 'PUT' : 'POST'
-      const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
-      const j = await r.json()
-      if (!r.ok) { toast.error(j.error || 'Save failed'); return }
-      toast.success(`${form.vbu} saved.`)
-      setShowAssignmentForm(false)
-      setEditingAssignment(null)
-      await loadAll()
-    } finally {
-      setSavingAssignment(false)
-    }
-  }
-
-  async function deleteAssignment(a) {
-    if (!confirm(`Remove the dashboard view assignment for "${a.vbu}"? This VBU will fall back to the default SSP view.`)) return
-    await fetch(`/api/admin/dashboard-views/vbu-assignments/${a.id}`, { method: 'DELETE' })
-    toast.info(`${a.vbu} assignment removed.`)
-    await loadAll()
-  }
-
   const pageLabelByKey = Object.fromEntries(pages.map((p) => [p.key, p.label]))
-  const viewNameById = Object.fromEntries(views.map((v) => [v.id, v.displayName]))
 
   return (
     <div>
@@ -351,7 +280,7 @@ export default function AdminDashboardViews({ navigate }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div className="card-title">Dashboard Views</div>
               {!showViewForm && (
-                <button className="button primary" onClick={() => { setEditingView(null); setShowViewForm(true); setShowAssignmentForm(false) }}>
+                <button className="button primary" onClick={() => { setEditingView(null); setShowViewForm(true) }}>
                   <Plus size={16} /> Add View
                 </button>
               )}
@@ -385,7 +314,7 @@ export default function AdminDashboardViews({ navigate }) {
                       <td><span className={`status-badge ${view.isActive ? 'good' : 'neutral'}`}>{view.isActive ? 'Active' : 'Inactive'}</span></td>
                       <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                         <button className="button secondary" onClick={() => setPreviewViewId(previewViewId === view.id ? null : view.id)}><Eye size={14} /> Preview</button>
-                        <button className="button secondary" style={{ marginLeft: 6 }} onClick={() => { setEditingView(view); setShowViewForm(true); setShowAssignmentForm(false) }}><Pencil size={14} /> Edit</button>
+                        <button className="button secondary" style={{ marginLeft: 6 }} onClick={() => { setEditingView(view); setShowViewForm(true) }}><Pencil size={14} /> Edit</button>
                         {!view.isBuiltin && (
                           <button className="danger" style={{ marginLeft: 6 }} onClick={() => deleteView(view)}><Trash2 size={14} /></button>
                         )}
@@ -398,43 +327,6 @@ export default function AdminDashboardViews({ navigate }) {
 
             {previewViewId && views.find((v) => v.id === previewViewId) && (
               <ViewPreview view={views.find((v) => v.id === previewViewId)} pageLabelByKey={pageLabelByKey} />
-            )}
-          </div>
-
-          <div className="card" style={{ marginTop: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div className="card-title">VBU Assignments</div>
-              {!showAssignmentForm && (
-                <button className="button primary" onClick={() => { setEditingAssignment(null); setShowAssignmentForm(true); setShowViewForm(false) }}>
-                  <Plus size={16} /> Add Assignment
-                </button>
-              )}
-            </div>
-
-            {showAssignmentForm && (
-              <AssignmentForm views={views} initial={editingAssignment} onSave={saveAssignment} onCancel={() => { setShowAssignmentForm(false); setEditingAssignment(null) }} saving={savingAssignment} />
-            )}
-
-            {assignments.length === 0 ? (
-              <div className="muted small" style={{ marginTop: 10 }}>No VBU assignments configured yet — every user currently falls back to the default SSP dashboard view.</div>
-            ) : (
-              <div className="table" style={{ marginTop: 10, overflowX: 'auto' }}>
-                <table style={{ width: '100%' }}>
-                  <thead><tr><th>VBU</th><th>Assigned View</th><th></th></tr></thead>
-                  <tbody>
-                    {assignments.map((a) => (
-                      <tr key={a.id}>
-                        <td>{a.vbu}</td>
-                        <td>{viewNameById[a.dashboardViewId] || a.dashboardViewId}</td>
-                        <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                          <button className="button secondary" onClick={() => { setEditingAssignment(a); setShowAssignmentForm(true); setShowViewForm(false) }}>Edit</button>
-                          <button className="danger" style={{ marginLeft: 6 }} onClick={() => deleteAssignment(a)}><Trash2 size={14} /></button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
             )}
           </div>
         </>

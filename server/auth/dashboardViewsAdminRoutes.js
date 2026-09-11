@@ -4,11 +4,12 @@
 // requireAdminAccess, every mutation writes an audit log entry.
 import express from 'express'
 import * as dashboardViewsRepo from '../repositories/dashboardViewsRepo.js'
-import * as vbuViewAssignmentsRepo from '../repositories/vbuViewAssignmentsRepo.js'
 import * as auditLogRepo from '../repositories/auditLogRepo.js'
 import * as microsoftRepo from '../repositories/microsoftRepo.js'
 import { requireAdminAccess } from './middleware.js'
 import { PAGE_BY_KEY } from './pages.js'
+import { belongsToVbu } from './vbuScope.js'
+import { DEFAULT_VIEW_ID } from '../services/dashboardViews.js'
 import { LOGO_KEYS, THEME_TOKEN_KEYS, HEADER_GRAPHIC_KEYS, HEADER_DECORATION_KEYS, SIDEBAR_DECORATION_KEYS } from '../../src/utils/dashboardViewAssets.js'
 
 export const dashboardViewsAdminRouter = express.Router()
@@ -40,6 +41,47 @@ function validAllowedVbuIds(vbuIds) {
   const known = new Set(microsoftRepo.listDistinctVbus())
   const cleaned = vbuIds.map((v) => String(v || '').trim()).filter(Boolean)
   return Array.from(new Set(cleaned)).filter((v) => known.has(v))
+}
+
+// A NON-DEFAULT view's allowedVbuIds is the ONE place both branding
+// resolution (server/services/dashboardViews.js#resolveDashboardView) and
+// business-data scope (computeAllowedVbusForUser) read from — so the same
+// VBU must never be claimed by two non-default views at once, the same
+// guarantee the old, separate vbu_view_assignments table enforced with a
+// DB-level UNIQUE column. Without this, resolveDashboardView's ordering
+// would silently and arbitrarily pick one of the claiming views for
+// login-time branding.
+//
+// The DEFAULT view (SSP Central Services) is exempt on both sides of this
+// check — confirmed live against the real database, an administrator had
+// already configured it with a broader allowedVbuIds (several VBUs,
+// including ones ALSO claimed by SSP UK & Ireland/Worldwide) purely for a
+// wider business-data aggregate, never as a branding claim —
+// resolveDashboardView's own comment explains why it excludes the default
+// view from the claim search for the same reason. So: (1) the default
+// view's own allowedVbuIds can freely overlap with anything and is never
+// itself conflict-checked, and (2) a non-default view's allowedVbuIds is
+// only checked against OTHER non-default views, never against the
+// default's.
+function vbusClaimedByOtherViews(excludeViewId) {
+  const claimed = new Map()
+  for (const v of dashboardViewsRepo.listViews()) {
+    if (v.id === excludeViewId || v.id === DEFAULT_VIEW_ID) continue
+    for (const vbu of v.allowedVbuIds || []) claimed.set(vbu, v.displayName)
+  }
+  return claimed
+}
+
+function findVbuConflicts(vbuIds, excludeViewId) {
+  if (excludeViewId === DEFAULT_VIEW_ID) return []
+  const claimed = vbusClaimedByOtherViews(excludeViewId)
+  const conflicts = []
+  for (const vbu of vbuIds) {
+    for (const [claimedVbu, viewName] of claimed) {
+      if (belongsToVbu(claimedVbu, vbu)) conflicts.push({ vbu, viewName })
+    }
+  }
+  return conflicts
 }
 
 // Sparse theme override — only the fixed, known token keys are ever
@@ -89,12 +131,17 @@ dashboardViewsAdminRouter.get('/api/admin/dashboard-views/vbus', requireAdminAcc
 dashboardViewsAdminRouter.post('/api/admin/dashboard-views', requireAdminAccess, (req, res) => {
   const { displayName, description, logoKey, theme, pages, allowedVbuIds } = req.body || {}
   if (!displayName || !String(displayName).trim()) return res.status(400).json({ error: 'Display name is required.' })
+  const cleanedVbuIds = validAllowedVbuIds(allowedVbuIds)
+  const conflicts = findVbuConflicts(cleanedVbuIds, null)
+  if (conflicts.length) {
+    return res.status(409).json({ error: `${conflicts[0].vbu} is already assigned to "${conflicts[0].viewName}". Remove it there first.` })
+  }
   const result = dashboardViewsRepo.createView({
     displayName, description,
     logoKey: validLogoKey(logoKey),
     theme: validTheme(theme),
     pages: validPages(pages),
-    allowedVbuIds: validAllowedVbuIds(allowedVbuIds)
+    allowedVbuIds: cleanedVbuIds
   })
   if (!result.ok) return res.status(result.status).json({ error: result.error })
   auditLogRepo.record({
@@ -109,12 +156,20 @@ dashboardViewsAdminRouter.put('/api/admin/dashboard-views/:id', requireAdminAcce
   if (!existing) return res.status(404).json({ error: 'Dashboard view not found.' })
   const { displayName, description, logoKey, theme, pages, allowedVbuIds, isActive } = req.body || {}
   if (displayName !== undefined && !String(displayName).trim()) return res.status(400).json({ error: 'Display name cannot be blank.' })
+  let cleanedVbuIds
+  if (allowedVbuIds !== undefined) {
+    cleanedVbuIds = validAllowedVbuIds(allowedVbuIds)
+    const conflicts = findVbuConflicts(cleanedVbuIds, req.params.id)
+    if (conflicts.length) {
+      return res.status(409).json({ error: `${conflicts[0].vbu} is already assigned to "${conflicts[0].viewName}". Remove it there first.` })
+    }
+  }
   const view = dashboardViewsRepo.updateView(req.params.id, {
     displayName, description,
     logoKey: logoKey !== undefined ? validLogoKey(logoKey) : undefined,
     theme: theme !== undefined ? validTheme(theme) : undefined,
     pages: pages !== undefined ? validPages(pages) : undefined,
-    allowedVbuIds: allowedVbuIds !== undefined ? validAllowedVbuIds(allowedVbuIds) : undefined,
+    allowedVbuIds: cleanedVbuIds,
     isActive
   })
   auditLogRepo.record({
@@ -128,9 +183,10 @@ dashboardViewsAdminRouter.delete('/api/admin/dashboard-views/:id', requireAdminA
   const existing = dashboardViewsRepo.getView(req.params.id)
   if (!existing) return res.status(404).json({ error: 'Dashboard view not found.' })
   if (existing.isBuiltin) return res.status(403).json({ error: 'Built-in dashboard views cannot be deleted.' })
-  const inUse = vbuViewAssignmentsRepo.listAssignments().filter((a) => a.dashboardViewId === existing.id)
-  if (inUse.length > 0) {
-    return res.status(409).json({ error: 'This dashboard view is currently assigned to one or more VBUs. Remove or reassign those first.' })
+  // A view's own allowedVbuIds IS its VBU assignment now (see
+  // resolveDashboardView) — no separate assignments table to check.
+  if ((existing.allowedVbuIds || []).length > 0) {
+    return res.status(409).json({ error: 'This dashboard view is currently assigned to one or more VBUs. Remove them from "VBU Data" first.' })
   }
   dashboardViewsRepo.deleteView(existing.id)
   auditLogRepo.record({
@@ -138,46 +194,4 @@ dashboardViewsAdminRouter.delete('/api/admin/dashboard-views/:id', requireAdminA
     detail: { viewId: existing.id, displayName: existing.displayName }
   })
   res.json({ ok: true })
-})
-
-dashboardViewsAdminRouter.get('/api/admin/dashboard-views/vbu-assignments', requireAdminAccess, (req, res) => {
-  res.json({ assignments: vbuViewAssignmentsRepo.listAssignments() })
-})
-
-dashboardViewsAdminRouter.post('/api/admin/dashboard-views/vbu-assignments', requireAdminAccess, (req, res) => {
-  const { vbu, dashboardViewId } = req.body || {}
-  if (!vbu || !String(vbu).trim()) return res.status(400).json({ error: 'VBU is required.' })
-  if (!dashboardViewId || !dashboardViewsRepo.getView(dashboardViewId)) return res.status(400).json({ error: 'That dashboard view does not exist.' })
-  const result = vbuViewAssignmentsRepo.createAssignment({ vbu, dashboardViewId })
-  if (!result.ok) return res.status(result.status).json({ error: result.error })
-  auditLogRepo.record({
-    eventType: 'vbu_view_assignment_created', actorUpn: actorUpn(req), actorOid: req.user.oid,
-    detail: { assignmentId: result.assignment.id, vbu: result.assignment.vbu, dashboardViewId: result.assignment.dashboardViewId }
-  })
-  res.status(201).json({ assignment: result.assignment })
-})
-
-dashboardViewsAdminRouter.put('/api/admin/dashboard-views/vbu-assignments/:id', requireAdminAccess, (req, res) => {
-  const existing = vbuViewAssignmentsRepo.getAssignment(req.params.id)
-  if (!existing) return res.status(404).json({ error: 'Assignment not found.' })
-  const { vbu, dashboardViewId } = req.body || {}
-  if (dashboardViewId !== undefined && !dashboardViewsRepo.getView(dashboardViewId)) return res.status(400).json({ error: 'That dashboard view does not exist.' })
-  const assignment = vbuViewAssignmentsRepo.updateAssignment(req.params.id, { vbu, dashboardViewId })
-  auditLogRepo.record({
-    eventType: 'vbu_view_assignment_updated', actorUpn: actorUpn(req), actorOid: req.user.oid,
-    detail: { assignmentId: assignment.id, vbu: assignment.vbu, dashboardViewId: assignment.dashboardViewId }
-  })
-  res.json({ assignment })
-})
-
-dashboardViewsAdminRouter.delete('/api/admin/dashboard-views/vbu-assignments/:id', requireAdminAccess, (req, res) => {
-  const existing = vbuViewAssignmentsRepo.getAssignment(req.params.id)
-  const ok = vbuViewAssignmentsRepo.deleteAssignment(req.params.id)
-  if (existing) {
-    auditLogRepo.record({
-      eventType: 'vbu_view_assignment_deleted', actorUpn: actorUpn(req), actorOid: req.user.oid,
-      detail: { assignmentId: existing.id, vbu: existing.vbu }
-    })
-  }
-  res.json({ ok })
 })

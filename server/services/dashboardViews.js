@@ -10,7 +10,7 @@ import * as dashboardViewsRepo from '../repositories/dashboardViewsRepo.js'
 import * as vbuViewAssignmentsRepo from '../repositories/vbuViewAssignmentsRepo.js'
 import { PAGE_KEYS, PAGE_BY_KEY } from '../auth/pages.js'
 import { LOGO_REGISTRY, DEFAULT_LOGO_KEY } from '../../src/utils/dashboardViewAssets.js'
-import { belongsToVbu } from '../auth/vbuScope.js'
+import { belongsToVbu, belongsToAnyVbu } from '../auth/vbuScope.js'
 
 // The built-in view every unmapped/unknown VBU (and every local-admin
 // session, which has no Microsoft identity at all) falls back to — this is
@@ -56,19 +56,65 @@ function activeViewOrNull(id) {
   return view && view.isActive ? view : null
 }
 
-// vbu -> assigned view -> built-in SSP fallback -> hardcoded in-code
-// fallback. Never throws, never returns null/undefined — every caller can
-// render immediately.
+// vbu -> the one active, NON-DEFAULT view whose OWN allowedVbuIds claims
+// it -> built-in SSP fallback -> hardcoded in-code fallback. Never throws,
+// never returns null/undefined — every caller can render immediately.
+//
+// A Dashboard View's "configured VBU(s)" is a SINGLE business concept (a
+// view has a display name, configured VBU(s), pages, theme — Dashboard
+// View VBU Data Assignment spec) — this must be the exact same field
+// computeAllowedVbusForUser below already uses for BUSINESS-DATA scope,
+// never a second, independently-maintained mapping. This used to consult a
+// separate vbu_view_assignments table (branding-only, see
+// migrateVbuAssignmentsIntoAllowedVbuIds's own comment for the concrete bug
+// that caused: an administrator could check a view's "VBU Data" boxes
+// (allowedVbuIds) — the only VBU control visible while editing that view —
+// without realizing a SEPARATE "VBU Assignment" elsewhere in the admin UI
+// also had to be created before login-time branding resolution would ever
+// pick that view up, so the view's data scope was configured but the user
+// still landed on the default view every time). Resolving directly from
+// allowedVbuIds makes that impossible: there is only one thing to
+// configure, and it can never drift out of sync with itself.
+//
+// The DEFAULT (SSP Central Services) view is deliberately EXCLUDED from the
+// claim search below — confirmed live against the real database: an
+// administrator had already configured Central Services' OWN allowedVbuIds
+// with several VBUs (including SSP UK & Ireland's and SSP Worldwide's own)
+// purely to give the central/admin catch-all view a broader BUSINESS-DATA
+// aggregate, with no intention of that also rerouting real UK & Ireland/
+// Worldwide users' BRANDING to Central Services. The default view's own
+// allowedVbuIds still fully governs ITS OWN data scope (computeAllowedVbusForUser
+// below, and applyLocalAdminPreview when an admin explicitly selects it) —
+// only its participation in THIS claim search is excluded, exactly because
+// "the catch-all default" and "a specific branding claim" are different
+// things. server/auth/dashboardViewsAdminRoutes.js's conflict check mirrors
+// this same exclusion when validating a save.
 export function resolveDashboardView(vbu) {
   if (vbu) {
-    const assignment = vbuViewAssignmentsRepo.getAssignmentByVbu(vbu)
-    if (assignment) {
-      const assigned = activeViewOrNull(assignment.dashboardViewId)
-      if (assigned) return assigned
-    }
+    const claimed = dashboardViewsRepo.listActiveViews()
+      .filter((v) => v.id !== DEFAULT_VIEW_ID)
+      .find((v) => belongsToAnyVbu(vbu, v.allowedVbuIds))
+    if (claimed) return claimed
   }
   const fallback = activeViewOrNull(DEFAULT_VIEW_ID)
   return fallback || HARDCODED_FALLBACK_VIEW
+}
+
+// One-time (idempotent, safe every boot): merges any pre-existing
+// vbu_view_assignments row into its dashboard view's OWN allowedVbuIds, so
+// nothing an administrator already configured through the old, separate
+// "VBU Assignments" admin UI is silently lost now that resolveDashboardView
+// above resolves entirely from allowedVbuIds instead. Purely additive
+// (never removes a VBU an administrator already added directly) and a
+// permanent no-op once every assignment's VBU is already present on its
+// view — safe to keep calling on every startup.
+export function migrateVbuAssignmentsIntoAllowedVbuIds() {
+  for (const a of vbuViewAssignmentsRepo.listAssignments()) {
+    const view = dashboardViewsRepo.getView(a.dashboardViewId)
+    if (!view) continue
+    if (belongsToAnyVbu(a.vbu, view.allowedVbuIds)) continue
+    dashboardViewsRepo.updateView(view.id, { allowedVbuIds: [...view.allowedVbuIds, a.vbu] })
+  }
 }
 
 // The shape sent to the client — never exposes dashboard_json (nothing
@@ -321,9 +367,6 @@ export function applyInitialUkIrelandConfig() {
       }
     })
   }
-  if (!vbuViewAssignmentsRepo.getAssignmentByVbu(UK_IRELAND_VBU)) {
-    vbuViewAssignmentsRepo.createAssignment({ vbu: UK_IRELAND_VBU, dashboardViewId: 'SSP_UK_I' })
-  }
 }
 
 // Same one-time, idempotent pattern for the second real Dashboard View —
@@ -408,9 +451,6 @@ export function applyInitialWorldwideConfig() {
         sidebarDecorationKey: 'globe-sidebar'
       }
     })
-  }
-  if (!vbuViewAssignmentsRepo.getAssignmentByVbu(WORLDWIDE_VBU)) {
-    vbuViewAssignmentsRepo.createAssignment({ vbu: WORLDWIDE_VBU, dashboardViewId: 'SSP_WORLDWIDE' })
   }
 }
 

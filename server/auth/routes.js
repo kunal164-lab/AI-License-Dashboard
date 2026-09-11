@@ -10,6 +10,7 @@ import crypto from 'crypto'
 import { getMsalClient, LOGIN_SCOPES } from './msalClient.js'
 import { redirectUri, postLoginRedirect, postLogoutRedirect, isSsoConfigured, getEffectiveEntraConfig } from './config.js'
 import { computeEffectiveAccess } from './authorize.js'
+import { getOrRefreshAccess } from './middleware.js'
 import { fetchOwnProfilePhoto } from '../services/microsoft/profilePhoto.js'
 import * as auditLogRepo from '../repositories/auditLogRepo.js'
 
@@ -129,9 +130,25 @@ authRouter.post('/auth/microsoft/logout', (req, res) => {
 // gate authentication itself, since a local admin must be able to sign in
 // and stay signed in even when Entra ID is not configured at all (Part 3:
 // the emergency-recovery path).
-authRouter.get('/api/auth/me', (req, res) => {
+authRouter.get('/api/auth/me', async (req, res) => {
   if (!req.session?.user) return res.json({ configured: isSsoConfigured(), authenticated: false })
-  const access = req.session.access || { role: null, allowedPages: [], canWrite: false, vbu: null, dashboardView: null, effectiveAllowedPages: [] }
+  // Bug fix: this used to fall back to a hardcoded EMPTY access object
+  // whenever req.session.access was merely missing (not yet computed, or
+  // cleared by sqliteSessionStore.js#invalidateAllCachedAccess on the last
+  // server restart) — indistinguishable, in the browser, from a genuine
+  // "not authorized" result, and this route never wrote a real value back,
+  // so an affected session stayed stuck on Access Denied forever (this IS
+  // the frontend's own boot-time check — no other protected route ever ran
+  // to self-heal it). getOrRefreshAccess is the exact same recompute-or-
+  // reuse-cache logic every other protected route already uses (server/auth/
+  // middleware.js) — a genuinely unauthorized user still correctly gets an
+  // empty access object back, just now for the RIGHT reason.
+  let access
+  try {
+    access = await getOrRefreshAccess(req)
+  } catch (e) {
+    access = { role: null, allowedPages: [], canWrite: false, vbu: null, dashboardView: null, effectiveAllowedPages: [] }
+  }
   res.json({
     configured: isSsoConfigured(),
     authenticated: true,
