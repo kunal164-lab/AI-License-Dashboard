@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Internal IT Dashboard</title>
+  </head>
+  <body>
+    <div id="root">\n      <div style="font-family:Arial,Helvetica,sans-serif;padding:30px;color:#333">Loading application... If this message remains, an error prevented the app from starting.</div>
+    </div>
+
+    <script>
+      // show runtime errors on page to help debugging blank white screen
+      window.addEventListener('error', function (e) {
+        try {
+          const root = document.getElementById('root')
+          root.innerHTML = '<pre style="white-space:pre-wrap;color:#b91c1c;background:#fff;padding:16px;border-radius:6px;margin:20px;font-family:monospace;">' +
+            (e.error && e.error.stack ? e.error.stack : (e.message || String(e))) + '</pre>'
+        } catch (ex) { console.error(ex) }
+      })
+      window.addEventListener('unhandledrejection', function (ev) {
+        const root = document.getElementById('root')
+        root.innerHTML = '<pre style="white-space:pre-wrap;color:#b91c1c;background:#fff;padding:16px;border-radius:6px;margin:20px;font-family:monospace;">UnhandledRejection: ' + (ev.reason && ev.reason.stack ? ev.reason.stack : String(ev.reason)) + '</pre>'
+      })
+    </script>
+
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

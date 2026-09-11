@@ -1,0 +1,732 @@
+:root{
+  --bg:#f4f6fa;
+  --card:#ffffff;
+  --muted:#6b7280;
+  --text:#111827;
+  --accent:#0b5fff;
+  --accent-dark:#0847c4;
+  --border:#e5eaf1;
+  --good:#059669;
+  --warn:#d97706;
+  --bad:#dc2626;
+  --radius:10px;
+  --brand-red:#e4002b;
+  --navy-900:#041423;
+  --navy-800:#071029;
+  /* VBU-aware Dashboard View theme tokens (src/utils/theme.js) — the
+     subtle, per-view overridable surfaces (Part 10 of the spec: "subtle
+     differences... centralized theme tokens"). Defaults here are exactly
+     today's fixed values, so the SSP built-in view (theme: {}) looks
+     pixel-identical to before this existed. */
+  --sidebar-gradient-start:var(--navy-900);
+  --sidebar-gradient-end:var(--navy-800);
+  --sidebar-active:var(--accent);
+  /* Active nav item TEXT color — separate from --sidebar-active (the
+     background) since a light/blush active background needs dark text
+     for readability, while every other view's darker active background
+     keeps the existing white nav text. */
+  --sidebar-active-text:#fff;
+  --header-accent:var(--accent);
+  /* Subtle top-of-content background wash (opt-in per view — see
+     src/utils/theme.js) — transparent by default, so every view besides
+     one that explicitly sets it looks exactly as before. */
+  --content-background-wash:transparent;
+  /* Sidebar logo width override (opt-in per view) — see AppLogo usage in
+     Sidebar.jsx; height is never set explicitly, so aspect ratio is
+     always preserved regardless of this value. */
+  --sidebar-logo-width:72px;
+  --sidebar-width:236px;
+  --header-min-height:auto;
+  --header-background:#fff;
+}
+*{box-sizing:border-box}
+/* Deliberately NO overflow-x:hidden here (Responsiveness spec, Part 22:
+   "do not hide overflow globally... that can conceal real layout
+   problems") — every genuinely wide element in this app (tables, chart
+   grids, KPI grids, modals) already contains its OWN horizontal scroll or
+   shrinks fluidly (see .table/.chart-card/.kpi-row/.modal below), so nothing
+   here should ever need the page itself to overflow. margin:0 + width:100%
+   on html/body plus .app-root/.main/.content's own max-width:100% chain
+   below is what actually keeps the page from overflowing — not a blanket
+   hidden-overflow safety net that would silently mask a real regression. */
+html,body{margin:0;width:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+.app-root{display:flex;min-height:100vh;width:100%;max-width:100vw}
+
+/* ---------- Sidebar ---------- */
+/* NOTE: deliberately NO overflow:hidden here — same reasoning as .header
+   below (see that comment): .sidebar-decoration is fully self-contained
+   via inset:0 + matching width/height, so nothing here needs clipping,
+   and overflow:hidden on this ancestor would silently clip any future
+   sidebar popover/tooltip the same way it clipped the header's profile
+   dropdown. */
+.sidebar{position:relative;width:var(--sidebar-width);flex-shrink:0;background:linear-gradient(180deg,var(--sidebar-gradient-start) 0%,var(--sidebar-gradient-end) 100%);color:#e6f2ff;padding:18px 16px;display:flex;flex-direction:column;border-right:1px solid rgba(255,255,255,0.14);box-shadow:2px 0 18px rgba(2,6,23,0.35)}
+.brand{font-weight:700;margin-bottom:12px}
+.sidebar img{display:block;margin-bottom:8px}
+.sidebar-logo{width:var(--sidebar-logo-width);max-width:100%;height:auto}
+.sidebar-subtitle{font-size:12px;line-height:1.5;color:#9fb3c8}
+.nav{margin-top:20px;display:flex;flex-direction:column;position:relative;z-index:1}
+.nav button{display:flex;align-items:center;gap:10px;width:100%;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.14);border-left:4px solid transparent;color:inherit;padding:10px 12px;border-radius:8px;text-align:left;margin-bottom:10px;cursor:pointer;font-weight:600;font-size:14px;transition:background .12s,border-color .12s,transform .06s}
+.nav button:last-child{margin-bottom:0}
+.nav-icon{display:inline-flex;align-items:center;justify-content:center;width:18px;flex-shrink:0}
+.nav-icon svg{width:18px;height:18px}
+.nav button:hover:not(.active){background:rgba(255,255,255,0.07);border-color:rgba(255,255,255,0.26);transform:translateX(2px)}
+/* --sidebar-active-bg is intentionally NOT declared in :root — the
+   var() fallback below (a translucent tint over the dark sidebar) is
+   every existing view's exact original look. A view whose approved
+   design calls for a solid light/blush active pill (e.g. SSP UK &
+   Ireland) sets --sidebar-active-bg directly (a flat color, via its own
+   theme) AND --sidebar-active-text to a dark color for contrast — the
+   two always travel together, never one without the other. */
+.nav button.active{background:var(--sidebar-active-bg,linear-gradient(90deg,color-mix(in srgb,var(--sidebar-active) 22%,transparent),color-mix(in srgb,var(--sidebar-active) 10%,transparent)));border-color:color-mix(in srgb,var(--sidebar-active) 55%,transparent);border-left-color:var(--sidebar-active);color:var(--sidebar-active-text);box-shadow:0 0 0 1px color-mix(in srgb,var(--sidebar-active) 15%,transparent) inset}
+
+/* Decorative Dashboard View sidebar background — a REAL image asset
+   (src/components/SidebarDecoration.jsx renders a plain <img>; SSP UK &
+   Ireland's own artwork is public/assets/dashboard/sidebar-bg-ukireland.png,
+   cropped from the approved design reference, never a CSS/SVG recreation).
+   Opt-in per view; every other view renders nothing here. Fills the
+   sidebar edge-to-edge and sits BEHIND all real content — z-index:0 here,
+   every real content element below (logo wrapper, subtitle, .nav,
+   .sidebar-footer) is explicitly given position:relative + z-index:1, so
+   it can never intercept clicks or sit above nav/branding text. margin:0
+   overrides the generic ".sidebar img{margin-bottom:8px}" rule, which
+   would otherwise nudge this absolutely-positioned image away from the
+   sidebar's true edges. */
+.sidebar-decoration{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:bottom;opacity:0.9;z-index:0;pointer-events:none;margin:0}
+
+.sidebar-footer{position:relative;z-index:1;margin-top:auto;padding-top:16px;border-top:1px solid rgba(255,255,255,0.1)}
+.sidebar-vbu-badge{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.sidebar-vbu-badge img{width:30px;height:30px;object-fit:contain;margin:0;border-radius:6px;background:rgba(255,255,255,0.9);padding:2px}
+.sidebar-vbu-badge-name{font-size:14px;font-weight:700;color:#fff;line-height:1.2}
+.sidebar-vbu-badge-app{font-size:11px;color:#9fb3c8;line-height:1.2}
+/* A thin decorative accent line ABOVE the tagline (not beside it) — a
+   theme's sidebarTagline string may contain literal newlines (e.g. SSP
+   Worldwide's "A Better\nTomorrow\nTogether."), rendered as real stacked
+   lines of actual text via white-space:pre-line, never baked into an
+   image. */
+.sidebar-tagline{font-family:Georgia,'Times New Roman',serif;font-style:italic;color:#e6f2ff;font-size:14px;line-height:1.5;margin-bottom:14px;padding-top:10px;border-top:1px solid color-mix(in srgb,var(--sidebar-active) 50%,transparent);white-space:pre-line}
+.sidebar-footer-label{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#7e93aa;margin-bottom:2px}
+.sidebar-footer-time{font-size:14px;font-weight:600;color:#e6f2ff;margin-bottom:10px}
+.sidebar-footer .button.primary{width:100%;justify-content:center;display:flex;align-items:center;gap:6px}
+
+/* ---------- Shell ---------- */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;max-width:100%;background-image:radial-gradient(ellipse 900px 500px at 100% 0%,var(--content-background-wash),transparent 70%);background-repeat:no-repeat}
+/* Fluid padding (clamp) rather than a single fixed value + one narrow-
+   width override — scales smoothly between a compact phone-width gutter
+   and the existing desktop padding, instead of jumping at one breakpoint.
+   margin:0 auto centers the capped-width content on an ultra-wide monitor
+   (e.g. 3440px) instead of leaving it flush against the sidebar with a
+   large empty gap on the right — max-width itself is unchanged. */
+.content{padding:clamp(12px,2vw,20px) clamp(12px,2.5vw,24px);max-width:1920px;width:100%;margin:0 auto}
+
+/* ---------- Header ---------- */
+/* NOTE: deliberately NO overflow:hidden here (removed — see the bug it
+   caused, below). .header-decoration below is fully self-contained via
+   inset:0 + matching width/height, so it never needs clipping to stay
+   within the header's own box — but overflow:hidden on an ANCESTOR clips
+   ALL descendants that visually extend past its box, regardless of their
+   own z-index. The profile dropdown (.profile-dropdown, a descendant of
+   .header-right below) intentionally pops open BELOW the header via
+   position:absolute — overflow:hidden here silently clipped it to
+   nothing. z-index alone can never override an ancestor's overflow
+   clipping, so the fix is removing the (unnecessary) overflow:hidden, not
+   raising any z-index. */
+/* align-items:center (was flex-start) so the right-side controls stay
+   vertically centered in the header regardless of exactly how tall the
+   title block or a view's own header graphic render at. */
+.header{position:relative;display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px 24px;min-height:var(--header-min-height);border-bottom:1px solid var(--border);border-top:3px solid var(--header-accent);background:var(--header-background);flex-wrap:wrap}
+
+/* Decorative Dashboard View header BACKGROUND — a REAL image asset
+   (src/components/HeaderDecoration.jsx renders a plain <img>; SSP UK &
+   Ireland's own artwork is public/assets/dashboard/header-bg-ukireland.png,
+   cropped from the approved design reference, never a CSS/SVG recreation).
+   Opt-in per view; every other view renders nothing here. Fills the
+   header edge-to-edge and sits BEHIND all real content — z-index:0 here,
+   the header's title/subtitle block, HeaderGraphic, and header-right are
+   all normal in-flow content (painted after a z-index:0 positioned
+   sibling per CSS stacking rules) plus explicitly reinforced with their
+   own position:relative + z-index:1 in Header.jsx, so text/buttons/profile
+   menu are never covered or click-blocked. inset:0 + matching width/height
+   keeps this image's own box exactly bounded to the header, so it never
+   needs the header itself to clip overflow. */
+.header-decoration{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.85;z-index:0;pointer-events:none;margin:0}
+/* SSP Worldwide's banner artwork is much wider/flatter (native ~5.7:1)
+   than the compact header box it fills (~14:1+) — object-fit:cover must
+   crop vertically to fill the box, and a center crop would slice the
+   "Global People Stronger Together" text (baked into the upper area of
+   the artwork). Anchoring to the top keeps the full world map AND that
+   text in frame, at the cost of the lower landmark-silhouette row —
+   confirmed by rendering candidate crops directly. */
+.header-decoration-globe-header{object-position:center top}
+
+/* Real header content, explicitly stacked ABOVE the z-index:0 decoration
+   image — CSS stacking rules paint a z-index:0 positioned element AFTER
+   plain in-flow content, so without this, .header-decoration would cover
+   these rather than sit behind them. */
+.header-title-block{position:relative;z-index:1}
+
+/* Decorative Dashboard View header graphic (src/components/HeaderGraphic.jsx)
+   — opt-in per view (SSP Worldwide's globe/flight-path motif); every other
+   view renders nothing here, so this never affects their layout. */
+/* SSP Worldwide no longer uses this component at all (its header artwork
+   is now the real header-bg-worldwide.png background image, see
+   HeaderDecoration.jsx) — this is currently only used by SSP Central
+   Services' restrained "Global People / Stronger Together" treatment
+   (dashboardViews.js#applyInitialCentralServicesConfig), which explicitly
+   must stay small/compact, never a banner — sized well within a
+   content-driven (not enlarged) header height. */
+.header-graphic{position:relative;z-index:1;display:flex;align-items:center;gap:8px;flex:1;min-width:0;max-width:260px;justify-content:center}
+.header-graphic-svg{width:100%;height:auto;max-width:160px;flex-shrink:1}
+.header-graphic-tagline{font-family:Georgia,'Times New Roman',serif;font-style:italic;color:var(--header-accent);font-size:13px;line-height:1.25;white-space:nowrap;text-align:right}
+@media (max-width:1100px){.header-graphic{display:none}}
+/* clamp() scales the page title fluidly between a narrow-viewport floor
+   and the existing desktop size, rather than a single fixed size that
+   either wraps awkwardly on a phone-width header or never gets any larger
+   on an ultra-wide monitor. */
+.header h2{margin:0;font-size:clamp(16px,2vw,20px);font-weight:700}
+.header-right{position:relative;z-index:1;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.header-status-pill{display:flex;flex-direction:column;gap:2px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 14px}
+.header-status-pill .status-line{display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--good);display:inline-block}
+.status-dot.dot-warn{background:var(--warn)}
+.status-dot.dot-bad{background:var(--bad)}
+.header-refresh-btn{display:flex;align-items:center;gap:6px;font-size:14px;padding:10px 16px}
+
+/* ---------- Header profile menu ---------- */
+/* The one account-actions surface in the app (moved here from the old
+   sidebar footer). Same visual language as the existing column-filter
+   popover (absolute, white, bordered, same shadow) rather than a new
+   pattern. */
+.profile-menu{position:relative}
+.profile-avatar-btn{display:flex;align-items:center;gap:6px;background:none;border:1px solid var(--border);border-radius:999px;padding:4px 10px 4px 4px;cursor:pointer}
+.profile-avatar-btn:hover{background:var(--bg)}
+.profile-avatar{width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;line-height:1}
+.profile-avatar-lg{width:38px;height:38px;font-size:14px}
+.profile-avatar-img{object-fit:cover;background:var(--bg)}
+.profile-chevron{color:var(--muted)}
+/* right:0 already anchors this to the profile button's own right edge
+   (itself always the header's rightmost element), so it opens LEATWARD,
+   away from the viewport's right edge, by construction — the realistic
+   overflow risk on a narrow viewport is the LEFT edge instead (a 250px
+   panel genuinely not fitting). max-width is the safety net for that case
+   (Responsiveness spec, Part 6) without needing JS to measure/flip
+   position — a fixed 250px width already comfortably fits down to very
+   narrow phone widths once this cap applies. */
+.profile-dropdown{position:absolute;top:100%;right:0;margin-top:8px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px rgba(2,6,23,0.16);width:250px;max-width:calc(100vw - 24px);z-index:40;padding:8px;text-align:left}
+.profile-dropdown-header{display:flex;align-items:center;gap:10px;padding:6px 8px 10px}
+.profile-dropdown-identity{min-width:0}
+.profile-dropdown-name{font-weight:700;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.profile-dropdown-sub{word-break:break-word}
+/* VBU/role lines — same truncate-not-wrap treatment as the name above, so
+   a long VBU (e.g. "SSP Central Services") or long role list never
+   stretches the dropdown wider or wraps awkwardly. */
+.profile-dropdown-meta{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.profile-dropdown-divider{height:1px;background:var(--border);margin:6px 0}
+.profile-dropdown-item{display:flex;align-items:center;gap:8px;width:100%;background:none;border:none;padding:8px;border-radius:6px;font-size:13px;cursor:pointer;text-align:left;color:var(--text)}
+.profile-dropdown-item:hover{background:var(--bg)}
+
+/* ---------- Buttons ---------- */
+/* white-space:nowrap so a longer action label ("Disable Administrator
+   Sign-In", "Test Microsoft Entra Configuration") never wraps onto a
+   second line inside the button — width grows to fit instead. */
+.button{background:var(--accent);color:white;padding:8px 14px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;transition:background .12s;white-space:nowrap}
+.button:hover{background:var(--accent-dark)}
+.button:disabled{opacity:.6;cursor:not-allowed}
+.button.secondary{background:#fff;color:var(--text);border:1px solid var(--border)}
+.button.secondary:hover{background:var(--bg)}
+.button.danger,button.danger{background:#fef2f2;color:#b91c1c;padding:8px 14px;border:1px solid #fecaca;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.button.danger svg,button.danger svg{width:16px;height:16px}
+.button.danger:hover,button.danger:hover{background:#fee2e2}
+.icon-button{background:transparent;border:none;color:var(--muted);cursor:pointer;padding:6px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center}
+.icon-button:hover{background:var(--bg);color:var(--text)}
+.icon-button svg{width:16px;height:16px}
+
+/* Buttons with an icon + text: consistent gap, icon inherits text color unless a status color is applied deliberately. */
+.button svg,.expand-toggle svg{width:16px;height:16px;flex-shrink:0}
+.button{display:inline-flex;align-items:center;gap:6px}
+.expand-toggle{display:inline-flex;align-items:center;gap:6px}
+
+/* ---------- Cards / KPIs ---------- */
+.card{background:var(--card);padding:18px;border-radius:var(--radius);border:1px solid var(--border);box-shadow:0 1px 3px rgba(16,24,40,0.05);margin-bottom:16px}
+.card-title{font-size:12px;color:var(--text);font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:16px;margin-bottom:20px}
+/* A page with many more KPI tiles than the app-wide default (e.g.
+   Microsoft 365's 13) needs a wider floor per card, or auto-fit packs
+   them all into one row at the 170px default, squeezing every card down
+   to an unreadable sliver — the exact "too narrow" problem this fixes.
+   Root cause, not a band-aid: this is the SAME repeat(auto-fit,minmax())
+   pattern already used everywhere else, just with a floor wide enough for
+   a long label like "Non-Compliant Devices" to sit comfortably. */
+.kpi-row-dense{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+/* Flex children default to min-width:auto, which lets a long KPI title
+   refuse to shrink and force its card (and the whole grid track) wider
+   than intended — the actual root cause of KPI cards distorting the grid.
+   Scoped to .kpi-top specifically so section-header titles elsewhere are
+   untouched. */
+.kpi-top .card-title{min-width:0;overflow-wrap:break-word}
+.kpi{background:var(--card);padding:18px 20px;border-radius:var(--radius);border:1px solid var(--border);box-shadow:0 1px 3px rgba(16,24,40,0.05)}
+.kpi-clickable{cursor:pointer;transition:box-shadow .12s,border-color .12s,transform .12s}
+.kpi-clickable:hover{box-shadow:0 8px 20px rgba(16,24,40,0.1);border-color:var(--accent);transform:translateY(-1px)}
+.kpi-clickable:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.kpi-filter-hint{margin-left:auto;color:#c3cbd9;flex-shrink:0}
+.kpi-top{display:flex;align-items:center;gap:10px}
+.kpi-icon-badge{width:38px;height:38px;border-radius:10px;background:#eef2ff;color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.kpi-icon-badge svg{width:18px;height:18px}
+.kpi-icon-badge.badge-blue{background:#eaf1ff;color:#2563eb}
+.kpi-icon-badge.badge-purple{background:#f3edff;color:#7c3aed}
+.kpi-icon-badge.badge-green{background:#e7f9f1;color:#059669}
+.kpi-icon-badge.badge-orange{background:#fff2e5;color:#d97706}
+.kpi-icon-badge.badge-red{background:#fdecec;color:#dc2626}
+.kpi-icon-badge.badge-teal{background:#e6fafa;color:#0891b2}
+.kpi-value{font-size:clamp(20px,2.4vw,28px);font-weight:700;margin-top:8px;line-height:1.1;color:var(--text)}
+.kpi-bottom{display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:8px}
+.kpi-trend{font-size:11px;font-weight:700;padding:2px 6px;border-radius:999px;background:#f1f5f9;color:var(--muted);white-space:nowrap}
+.kpi-trend.trend-up{background:#ecfdf5;color:var(--good)}
+.kpi-trend.trend-down{background:#fef2f2;color:var(--bad)}
+
+/* ---------- Insight row ---------- */
+/* ---------- Brand/product logos (src/components/BrandLogo.jsx) ----------
+   One consistent container for every provider/product mark in the app —
+   normalizes square vs. wordmark-shaped logos to the same visual size
+   instead of letting them stretch or sit unevenly. */
+.brand-logo{display:inline-flex;align-items:center;gap:8px;min-width:0}
+.brand-logo-box{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:8px;background:#fff;border:1px solid var(--border)}
+.brand-logo-box-bare{background:transparent;border:none}
+.brand-logo-mark{display:inline-flex;align-items:center;justify-content:center}
+.brand-logo-mark svg{width:100%;height:100%;display:block}
+.brand-logo-monogram{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;color:#fff;font-weight:700;line-height:1}
+.brand-logo-generic{color:#b7c0cc;flex-shrink:0}
+.brand-logo-label{font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.insight-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.insight-card{display:flex;gap:10px;align-items:flex-start;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.insight-icon{flex-shrink:0;margin-top:1px}
+.insight-icon svg{width:16px;height:16px}
+.insight-good .insight-icon{color:var(--good)}
+.insight-warn .insight-icon{color:var(--warn)}
+.insight-info .insight-icon{color:var(--accent)}
+.insight-title{font-size:13px;font-weight:600;color:var(--text)}
+.insight-sub{font-size:12px;color:var(--muted);margin-top:1px}
+.insight-clickable{cursor:pointer;transition:box-shadow .12s,border-color .12s,transform .12s}
+.insight-clickable:hover{box-shadow:0 6px 16px rgba(16,24,40,0.09);border-color:var(--accent);transform:translateY(-1px)}
+.insight-clickable:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.insight-nav-hint{margin-left:auto;color:#c3cbd9;flex-shrink:0;align-self:center}
+
+/* ---------- Charts ---------- */
+/* Explicit breakpoints (rather than pure auto-fit) so the cascade matches
+   1366/1440/1920 targets predictably: 5 cols on very wide screens, stepping
+   down to 1 on narrow ones. */
+.charts{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-top:4px}
+@media (max-width:1700px){.charts{grid-template-columns:repeat(4,1fr)}}
+@media (max-width:1280px){.charts{grid-template-columns:repeat(3,1fr)}}
+@media (max-width:900px){.charts{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:560px){.charts{grid-template-columns:1fr}}
+/* A small, fixed set of charts (e.g. Microsoft 365's Overview: exactly 4)
+   looks unbalanced forced into the generic 5-wide .charts grid (4 charts
+   filling 4 of 5 columns). A dedicated 2-column layout on desktop,
+   collapsing to 1 on narrow screens, matches how many such chart sets are
+   actually sized in this app. */
+.charts-2col{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:4px}
+@media (max-width:900px){.charts-2col{grid-template-columns:1fr}}
+.chart-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:0 1px 3px rgba(16,24,40,0.05);display:flex;flex-direction:column;min-height:252px;min-width:0}
+.chart-card-header{margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.chart-card-body{flex:1;display:flex;flex-direction:column;justify-content:center}
+.chart-card-footer{margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px 12px;color:var(--muted);min-height:160px}
+.empty-state-icon{color:#c3cbd9;margin-bottom:8px}
+.empty-state-title{font-weight:600;color:var(--text);font-size:13px}
+.empty-state-hint{font-size:12px;margin-top:4px;max-width:220px}
+
+/* ---------- Filters ---------- */
+.filters{display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.filters select,.filters input{border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;background:#fff;color:var(--text)}
+
+.search-input{display:flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:6px;padding:0 10px;background:#fff;color:var(--muted)}
+.search-input input{border:none;padding:7px 0;font-size:13px;outline:none}
+.search-input svg{flex-shrink:0}
+
+/* ---------- Tables ---------- */
+.table{background:var(--card);padding:12px;border-radius:var(--radius);border:1px solid var(--border);overflow-x:auto;max-width:100%}
+.table table{width:100%;border-collapse:collapse}
+.table th,.table td{padding:10px 12px;text-align:left;white-space:nowrap}
+.table thead th{position:sticky;top:0;background:var(--card);border-bottom:2px solid #e2e8f0;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.03em;font-weight:600}
+/* Was #f1f5f9 — nearly invisible against the white row/card background,
+   which is exactly why rows visually merged into one block of text. This
+   is the ONE shared table style every table in the app inherits from (see
+   FilterableDataTable/DataTable, which both just wrap a plain <table> in
+   this .table class) — fixed here once rather than per-page. */
+.table tbody tr{border-bottom:1px solid #e2e8f0}
+.table tbody tr:last-child{border-bottom:none}
+.table tbody tr:nth-child(even){background:#f8fafc}
+.table tbody tr:hover{background:#f0f5ff}
+.table-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:12px;flex-wrap:wrap}
+.expand-toggle{background:transparent;border:1px solid #dbe3ee;color:var(--muted);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap}
+.expand-toggle:hover{background:#f0f5ff;color:var(--accent);border-color:var(--accent)}
+.table-compact table{font-size:13px}
+.table-compact th,.table-compact td{padding:8px 10px}
+.table-compact td:first-child{font-weight:600;color:var(--text)}
+
+/* ---------- Sortable table headers ---------- */
+.th-sortable{cursor:pointer;user-select:none;position:relative}
+.th-inner{display:flex;align-items:center;gap:4px}
+.th-inner svg{width:12px;height:12px;flex-shrink:0}
+.th-sort-icon{opacity:.35}
+.th-sort-icon.active{opacity:1;color:var(--accent)}
+.th-filter-btn{background:transparent;border:none;color:var(--muted);cursor:pointer;padding:2px;border-radius:4px;display:inline-flex;align-items:center;flex-shrink:0}
+.th-filter-btn:hover{background:#e6edf6;color:var(--text)}
+.th-filter-btn.active{color:var(--accent)}
+.th-filter-btn svg{width:12px;height:12px}
+.th-cell-wrap{position:relative;display:inline-flex;align-items:center;gap:4px}
+
+/* ---------- Column filter popover (Excel-style) ---------- */
+.column-filter-popover{position:absolute;top:100%;left:0;margin-top:4px;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 10px 28px rgba(2,6,23,0.14);padding:10px;width:230px;max-width:calc(100vw - 24px);z-index:30;text-align:left}
+.column-filter-popover select,.column-filter-popover input{width:100%;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:13px}
+.column-filter-popover select{padding-right:26px;background-position:right 6px center;background-size:12px}
+.column-filter-values{max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--border);padding-top:6px}
+.column-filter-checkbox{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;text-transform:none;letter-spacing:normal;padding:3px 2px;border-radius:4px;cursor:pointer}
+.column-filter-checkbox:hover{background:var(--bg)}
+.link-button{background:none;border:none;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer;padding:0}
+.link-button:hover{text-decoration:underline}
+
+/* ---------- Users page quick-filter bar ---------- */
+.quick-filter-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.quick-filter-btn{position:relative;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer}
+.quick-filter-btn:hover{border-color:var(--accent)}
+.quick-filter-btn.active{border-color:var(--accent);background:#eaf1ff;color:var(--accent-dark)}
+.quick-filter-btn svg{width:14px;height:14px}
+
+.active-filter-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.filter-chip{display:inline-flex;align-items:center;gap:6px;background:#eaf1ff;color:var(--accent-dark);border:1px solid #cddcfb;border-radius:999px;padding:4px 6px 4px 10px;font-size:12px;font-weight:600}
+.filter-chip button{background:none;border:none;color:inherit;cursor:pointer;display:inline-flex;align-items:center;padding:2px;border-radius:50%}
+.filter-chip button:hover{background:rgba(37,99,235,0.15)}
+.filter-chip svg{width:12px;height:12px}
+
+/* ---------- Status badges ---------- */
+.status-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
+.status-badge svg{width:12px;height:12px;flex-shrink:0}
+.badge-active{background:#ecfdf5;color:var(--good)}
+.badge-low{background:#fffbeb;color:var(--warn)}
+.badge-unused{background:#fef2f2;color:var(--bad)}
+.badge-neutral{background:#f1f5f9;color:var(--muted)}
+.badge-syncing{background:#eaf1ff;color:var(--accent)}
+
+/* ---------- Dedicated product page menu (Products page) ---------- */
+.dedicated-pages{position:relative}
+.dedicated-pages-trigger{display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,var(--accent),#5b8cff);color:#fff;border:none;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(11,95,255,0.28);transition:box-shadow .12s,transform .12s}
+.dedicated-pages-trigger:hover{box-shadow:0 4px 14px rgba(11,95,255,0.38);transform:translateY(-1px)}
+.dedicated-pages-trigger svg{flex-shrink:0}
+.dedicated-pages-chevron{transition:transform .15s}
+.dedicated-pages-chevron.open{transform:rotate(180deg)}
+.dedicated-pages-menu{position:absolute;top:calc(100% + 8px);right:0;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px rgba(2,6,23,0.16);padding:6px;min-width:230px;max-width:calc(100vw - 24px);z-index:30}
+.dedicated-pages-menu-item{display:flex;align-items:center;gap:9px;width:100%;background:none;border:none;text-align:left;padding:10px 10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text)}
+.dedicated-pages-menu-item:hover{background:#eaf1ff;color:var(--accent-dark)}
+.dedicated-pages-menu-item .product-dot{width:9px;height:9px}
+.dedicated-pages-menu-arrow{margin-left:auto;color:#c3cbd9;flex-shrink:0}
+.dedicated-pages-menu-item:hover .dedicated-pages-menu-arrow{color:var(--accent)}
+
+/* ---------- Microsoft 365 unified export menu ----------
+   Same trigger button styling as .dedicated-pages-trigger (shared class),
+   but a wider, sectioned panel — this menu has considerably more content
+   (current view + up to 8 specific reports + complete report) than the
+   simple single-column menus elsewhere. */
+.m365-export-menu{position:absolute;top:calc(100% + 8px);right:0;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px rgba(2,6,23,0.16);padding:10px;width:340px;max-width:calc(100vw - 24px);max-height:70vh;overflow-y:auto;z-index:30}
+.m365-export-section{padding:6px 4px}
+.m365-export-section + .m365-export-section{border-top:1px solid var(--border);margin-top:4px}
+.m365-export-section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);margin-bottom:6px;padding:0 4px}
+.m365-export-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 4px;border-radius:6px}
+.m365-export-row:hover{background:#f8fafc}
+.m365-export-row-label{font-size:13px;font-weight:600;color:var(--text);min-width:0}
+.m365-export-row-actions{display:flex;gap:4px;flex-shrink:0}
+.m365-export-chip{background:#eef2ff;color:var(--accent-dark);border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer}
+.m365-export-chip:hover{background:var(--accent);color:#fff}
+
+/* ---------- Product cards (Products page) ---------- */
+.product-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:16px}
+.product-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;box-shadow:0 1px 2px rgba(16,24,40,0.03)}
+.product-card-header{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.product-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.product-card-name{font-weight:700;font-size:15px}
+.product-card-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}
+.product-metric-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.02em}
+.product-metric-value{font-size:15px;font-weight:700}
+
+/* ---------- Report modal ---------- */
+.report-scope-option{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer}
+.report-scope-option:hover{border-color:var(--accent)}
+.report-scope-option.selected{border-color:var(--accent);background:#f5f8ff}
+.report-scope-option.disabled{cursor:not-allowed;opacity:.6}
+.report-scope-option input{margin-top:3px}
+
+/* ---------- Data Sources ---------- */
+.source-option{display:flex;justify-content:space-between;align-items:center;padding:12px 4px;border-bottom:1px solid var(--border)}
+.source-option:last-child{border-bottom:none}
+.source-option-name{font-weight:600;font-size:14px}
+.provider-card{border:1px solid var(--border);border-radius:8px;padding:14px}
+
+/* ---------- Modals / panels ---------- */
+.modal{background:var(--card);padding:20px;border-radius:var(--radius);box-shadow:0 20px 40px rgba(2,6,23,0.25);width:min(720px,92vw);max-height:86vh;overflow-y:auto}
+.modal-wide{width:min(1080px,94vw)}
+.clickable-row{cursor:pointer}
+.clickable-row:hover{background:#eaf1ff !important}
+.link-text{color:var(--accent);font-weight:600;cursor:pointer;background:none;border:none;padding:0;text-align:left;font-size:inherit}
+.link-text:hover{text-decoration:underline}
+.modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,0.45);z-index:59;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal-panel{background:var(--card);border-radius:var(--radius);box-shadow:0 20px 40px rgba(2,6,23,0.25);width:min(480px,92vw);max-height:86vh;overflow-y:auto;padding:18px}
+.modal-panel-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+
+/* ---------- Toasts ---------- */
+.toast-host{position:fixed;right:20px;bottom:20px;z-index:80;display:flex;flex-direction:column;gap:8px;max-width:320px}
+.toast{padding:10px 14px;border-radius:8px;font-size:13px;font-weight:500;box-shadow:0 8px 20px rgba(2,6,23,0.18);color:#fff;background:#111827}
+.toast-success{background:#065f46}
+.toast-error{background:#991b1b}
+.toast-info{background:#1e293b}
+
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.spin{animation:spin 1s linear infinite}
+
+/* ---------- Activity list (Top AI Activities) ---------- */
+.activity-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px}
+.activity-row-label{display:flex;align-items:center;gap:8px;color:var(--muted)}
+.activity-row-label svg{width:15px;height:15px;color:var(--accent);flex-shrink:0}
+
+/* ---------- View-all link ---------- */
+.view-all-link{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:var(--accent);background:none;border:none;cursor:pointer;padding:0;margin-top:8px}
+.view-all-link:hover{text-decoration:underline}
+.view-all-link svg{width:14px;height:14px}
+
+/* ---------- Footer info bar ---------- */
+.info-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);margin-top:8px}
+
+/* ---------- Form controls (select/input) ----------
+   Base styling for any bare <select>/<input>/<textarea> in the app, so a
+   page that hasn't been custom-styled (like Cost) doesn't fall back to
+   raw browser defaults. More specific rules elsewhere (.filters select,
+   .column-filter-popover input, etc.) already match/override this. */
+select,
+input[type=text], input[type=number], input[type=date], input[type=password], input[type=email],
+textarea{
+  border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:13px;
+  background:#fff;color:var(--text);font-family:inherit;height:36px
+}
+textarea{height:auto}
+/* Custom chevron (native <select> arrows render inconsistently across
+   browsers/OS and look "plain" next to the rest of the app's custom
+   controls) — one shared background-image icon for every dropdown in the
+   app, so the Cost page's forms/currency selector match Users/Products/
+   Application's quick-filter dropdowns without needing per-page styling. */
+select{
+  cursor:pointer;appearance:none;-webkit-appearance:none;-moz-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;padding-right:30px
+}
+select:focus,input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(11,95,255,0.12)}
+select:disabled,input:disabled{background:var(--bg);cursor:not-allowed;opacity:.7}
+label{font-size:12px;font-weight:600;color:var(--muted)}
+/* Excludes checkbox/radio: this rule exists for the "Label above a
+   full-width text input" pattern (<label>Text<input/></label>), but a
+   checkbox/radio is meant to sit small and inline right next to its own
+   label text (e.g. <label class="checkbox-row"><input type=checkbox/>
+   Text</label>) — width:100% on a checkbox doesn't resize its visible
+   glyph (checkboxes ignore width/height in every browser) but DOES expand
+   its layout box to fill the row, which pushed the following label text
+   far away from the checkbox it belongs to. Found by actually rendering
+   the Administration page's page-permission checkbox grid, not visible
+   from the CSS alone. */
+label>select,label>input:not([type=checkbox]):not([type=radio]),label>textarea{display:block;width:100%;margin-top:4px;font-weight:400;color:var(--text)}
+
+/* ---------- Cost page ---------- */
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px 16px}
+.form-grid label{display:flex;flex-direction:column}
+.form-section-title{font-size:13px;font-weight:700;color:var(--text);margin:18px 0 4px}
+.form-section-title:first-child{margin-top:0}
+.form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
+
+/* ---------- Settings rows (Administration page) ----------
+   A classic label-left/input-right settings row, one field per line —
+   used for Entra config, local admin password, and the mapping form's
+   simple text fields. Deliberately not `.form-grid` (that's for several
+   SHORT fields side by side, e.g. Cost's rate/currency row); a sequential
+   settings form reads better as one full-width row per field. */
+.settings-form{display:flex;flex-direction:column;gap:14px}
+.settings-row{display:flex;align-items:flex-start;gap:18px}
+.settings-row-label{width:190px;flex-shrink:0;padding-top:8px}
+.settings-row-field{flex:1;min-width:0;max-width:360px}
+.settings-row-field input,.settings-row-field select{width:100%}
+.settings-row-help{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.4}
+@media (max-width: 640px){
+  .settings-row{flex-direction:column;align-items:stretch;gap:4px}
+  .settings-row-label{width:auto;padding-top:0}
+  .settings-row-field{max-width:none}
+}
+
+/* A settings-style card that shouldn't stretch to the full content width
+   (that just leaves a bounded form floating in a mostly-empty wide card) —
+   used for Entra config / Local Administrator, NOT the mappings/audit-log
+   cards, which contain full-width tables that benefit from the space. */
+.card-narrow{max-width:680px}
+
+/* ---------- Page-permission checkbox grid ---------- */
+.checkbox-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px 16px}
+.checkbox-grid-sub{grid-template-columns:repeat(auto-fill,minmax(170px,1fr));margin-top:8px;padding-left:4px}
+.checkbox-row{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;color:var(--text);cursor:pointer}
+.checkbox-row input{margin:0}
+
+/* ---------- Status badge (Enabled/Disabled, audit-log result) ----------
+   Never color-only (Part 16: "do not rely only on color") — always paired
+   with the state's own word. Built from the same --good/--bad tokens and
+   pill radius (999px) already used by .chip/.status-dot elsewhere. */
+.status-badge{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.status-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
+.status-badge.good{background:#ecfdf5;color:var(--good)}
+.status-badge.bad{background:#fef2f2;color:var(--bad)}
+.status-badge.neutral{background:var(--bg);color:var(--muted)}
+.field-hint{font-size:11px;color:var(--muted);font-weight:400;margin-top:3px}
+.section-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.section-header-text .card-title{margin-bottom:4px}
+.cost-summary-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f1f5f9}
+.cost-summary-row:last-child{border-bottom:none}
+
+/* ---------- Misc ---------- */
+.muted{color:var(--muted)}
+.small{font-size:12px}
+.chip{display:inline-block;padding:4px 8px;background:#eef2ff;border-radius:999px;font-size:12px;color:#0b5fff}
+.flex{display:flex;gap:8px;align-items:center}
+.import-area{display:flex;flex-direction:column;gap:8px}
+
+/* ---------- Responsive breakpoint system ----------
+   A small, deliberate set (Responsiveness spec, Part 23: "do not create
+   dozens of breakpoints") — three real bands, not one-off overrides
+   scattered per component: a medium-desktop/tablet band (also covers a
+   laptop at 110-125% browser zoom, which shrinks the effective CSS
+   viewport the same way a physically narrower screen would) and a
+   phone/narrow band with a genuine icon-only sidebar collapse. `.content`'s
+   own padding already scales continuously via clamp() above, so it needs
+   no override here. */
+@media (max-width: 900px){
+  .sidebar{width:200px}
+  .header{padding:12px 14px}
+}
+
+/* Icon-only collapsed sidebar — the approved logo asset is HIDDEN here
+   (Logo Rule: never resized below its approved size), never shrunk via
+   max-width. Every nav button/action remains present, clickable, and
+   correctly routes/enforces RBAC exactly as before — only the VISIBLE TEXT
+   collapses (title/aria-label on each button, set in Sidebar.jsx, keep it
+   identifiable for mouse-hover and screen-reader users). Branding text
+   (subtitle/VBU badge/tagline/auto-refresh info) is dropped at this width
+   for the same reason logos are: there simply isn't room to show it
+   without truncating it illegibly, and hiding it cleanly beats a garbled
+   partial render. */
+@media (max-width: 640px){
+  .sidebar{width:64px;padding:14px 8px}
+  .sidebar-logo-wrap,.sidebar-subtitle,.sidebar-vbu-badge,.sidebar-tagline,.sidebar-auto-refresh-info,.sidebar-footer-label,.sidebar-footer-time{display:none}
+  .nav-label{display:none}
+  .nav button{justify-content:center;padding:10px 8px}
+  .nav-icon{width:auto}
+  .sidebar-footer .button.primary{padding:10px 6px}
+}
+
+/* ---------- Auth / Sign-in ---------- */
+/* The left hero is a real photographic asset (public/login-hero.jpg) — a
+   1536x1024 DESIGNED composition, not a generic photo: the SSP logo,
+   kicker, word-list and tagline all live in its LEFT ~24% width, with a
+   technology/analytics screen mockup just right of that. This panel is
+   narrower and taller than the source image, so background-size:cover
+   crops horizontally — `background-position:left center` anchors the
+   image's own left edge to the panel's left edge (rather than a `center`
+   crop, which was cutting the SSP branding off entirely) so that
+   left-side composition survives the crop at every desktop width.
+   --navy-900 is a same-brand fallback color visible only if the asset is
+   missing/slow to load, never a substitute background of its own.
+   NOTE: never name this asset with an "auth"-prefixed path (e.g.
+   auth-hero.jpg) — vite.config.js's dev proxy forwards any /auth* request
+   to the backend for the real Microsoft/GitHub/Kiro OAuth routes, which
+   silently swallows a same-prefixed static asset request and serves back
+   index.html instead (the exact bug that made this panel render as a
+   solid navy fallback previously). */
+.auth-shell{min-height:100vh;display:flex;background:#fff}
+.auth-visual{position:relative;flex:0 0 44%;min-height:100vh;background-color:var(--navy-900);background-image:url('/login-hero.jpg');background-size:cover;background-position:left center;background-repeat:no-repeat}
+/* The image already carries the headline-equivalent messaging (its own
+   word-list + "PEOPLE TECHNOLOGY POSSIBILITIES" tagline, both living in
+   the left ~24% of the frame) — this card adds ONLY the one thing that
+   ISN'T already in the photo: the four capability bullets. Verified by
+   rendering the actual left-anchored crop at 1440/1600/1920px (not
+   guessed): the true empty area is NOT the far left (fully occupied by
+   the image's own branding column top-to-bottom) but the floor space just
+   right of that column, below the analytics-screen mockup — starting
+   safely clear of both around 50% across from the panel's left edge.
+   Anchored to the bottom edge (rather than a `top` percentage) so it reads
+   as a deliberate, grounded footer element instead of a floating card —
+   `left` (%) + `right` (px), never an explicit `width`, is what guarantees
+   it can never extend past .auth-visual's own edges (its positioning
+   context, set position:relative above) at any viewport size; `max-width`
+   is an extra, independent cap so it also can't become oversized on very
+   wide/ultra-wide screens where 44% of the viewport is itself very large. */
+.auth-hero-card{position:absolute;left:50%;right:20px;bottom:40px;max-width:380px;background:rgba(3,14,26,.6);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.16);border-radius:16px;padding:24px 26px;box-shadow:0 20px 45px rgba(0,0,0,.35)}
+.auth-features{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:16px}
+.auth-features li{display:flex;align-items:flex-start;gap:12px}
+.auth-feature-icon{flex-shrink:0;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);display:flex;align-items:center;justify-content:center;color:#fff}
+.auth-feature-icon svg{width:17px;height:17px}
+.auth-features strong{display:block;font-size:14px;color:#fff;margin-bottom:2px}
+.auth-features span{font-size:12.5px;color:#d7e2ec;line-height:1.4}
+
+.auth-panel{flex:1 1 56%;display:flex;align-items:center;justify-content:center;padding:40px;background:var(--bg)}
+.auth-card{width:100%;max-width:540px;background:#fff;border-radius:18px;border:1px solid var(--border);box-shadow:0 28px 60px rgba(2,6,23,.12);padding:44px 48px 34px}
+.auth-card-logo{width:120px;display:block;margin:0 auto 20px}
+.auth-card h2{margin:0;font-size:21px;text-align:center;font-weight:700}
+.auth-card-subtitle{margin:8px 0 24px;font-size:13px;color:var(--muted);text-align:center;line-height:1.5}
+
+.auth-ms-button{width:100%;justify-content:space-between;background:#2563eb;color:#fff;font-size:14px;padding:12px 16px;border-radius:8px;box-shadow:0 8px 20px rgba(37,99,235,.28);text-decoration:none}
+.auth-ms-button:hover{background:#1d4ed8}
+.auth-ms-button-label{display:flex;align-items:center;gap:10px}
+.auth-ms-icon-badge{background:#fff;border-radius:5px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+
+.auth-unavailable{display:flex;align-items:flex-start;gap:8px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:8px;padding:11px 12px;font-size:12.5px;line-height:1.45}
+
+.auth-divider{display:flex;align-items:center;gap:12px;margin:22px 0;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.08em}
+.auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+
+.auth-admin-box{border:1px solid var(--border);border-radius:12px;padding:18px}
+.auth-admin-heading{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px}
+.auth-admin-heading svg{color:var(--muted)}
+.auth-admin-sub{margin:4px 0 16px;font-size:12.5px;color:var(--muted);line-height:1.45}
+
+.auth-field{position:relative;margin-bottom:12px}
+.auth-field-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);display:flex;pointer-events:none}
+.auth-field input{width:100%;padding:10px 40px 10px 38px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:#fbfcfe}
+.auth-field input:focus-visible{outline:2px solid rgba(11,95,255,.35);outline-offset:0;border-color:var(--accent)}
+.auth-field-toggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;padding:6px;display:flex;border-radius:6px}
+.auth-field-toggle:hover{background:var(--bg);color:var(--text)}
+
+.auth-admin-submit{width:100%;justify-content:center;gap:8px;background:#111827;color:#fff;padding:11px 16px;border-radius:8px;font-size:14px}
+.auth-admin-submit:hover{background:#000}
+
+.auth-error{display:flex;align-items:flex-start;gap:8px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.45;margin-bottom:14px}
+.auth-error svg{flex-shrink:0;margin-top:1px}
+
+.auth-note{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.4}
+
+.auth-footer{margin-top:22px;padding-top:16px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:center;gap:6px;font-size:11.5px;color:var(--muted)}
+
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+@keyframes auth-spin{to{transform:rotate(360deg)}}
+.auth-spin{animation:auth-spin .8s linear infinite}
+
+@media (max-width: 860px){
+  .auth-shell{flex-direction:column}
+  /* The hero becomes a fixed-height banner (background-size:cover keeps
+     the photo undistorted) — the login form below it is what matters on a
+     small screen, so the capability card is dropped rather than crammed
+     in. At this aspect ratio (full viewport width, fixed short height) the
+     image's WIDTH becomes the constraining dimension for `cover`, so no
+     horizontal crop happens at all here (unlike desktop) — the only crop
+     is vertical, and `left top` (rather than `left center`) keeps that
+     crop entirely at the bottom, so the SSP logo at the very top is never
+     clipped. */
+  .auth-visual{flex:none;min-height:0;height:220px;background-position:left top}
+  .auth-hero-card{display:none}
+  .auth-panel{padding:24px}
+  .auth-card{max-width:480px;padding:30px 26px 22px;border-radius:16px}
+}

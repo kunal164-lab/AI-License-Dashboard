@@ -1,0 +1,21 @@
+node_modules
+
+# Real secrets (GitHub OAuth credentials, ENCRYPTION_KEY, DATABASE_URL, etc.)
+# — never committed. .env.example is the tracked template and is
+# intentionally NOT covered by these patterns.
+.env
+.env.*
+!.env.example
+
+dist
+server/data/*.sqlite
+server/data/*.sqlite-wal
+server/data/*.sqlite-shm
+
+# Claude Code local tooling artifacts — not part of the application.
+.claude/
+
+# Automated vulnerability-scan reports for this exact application — a
+# historical roadmap of attack surface that shouldn't sit in the repo
+# even privately-hosted, resolved findings included.
+security-reports/
