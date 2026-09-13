@@ -226,7 +226,7 @@ export default function CostByVbu({ currency = 'USD', selectedVbu, onSelectedVbu
       <div className="charts-2col">
         <ChartCard title="Cost by VBU" subtitle="Monthly cost, highest first — click a bar to select that VBU">
           {byVbuCost.length === 0 ? <EmptyState title="No VBU cost data available" /> : (
-            <ResponsiveContainer width="100%" height={horizontalBarChartHeight(byVbuCost.length, { min: 180 })}>
+            <ResponsiveContainer width="100%" height={horizontalBarChartHeight(byVbuCost.length, { min: 155 })}>
               <BarChart data={byVbuCost} layout="vertical" margin={{ left: 8, right: 8 }}>
                 <XAxis type="number" tick={{ fontSize: 10 }} />
                 <YAxis type="category" dataKey="name" width={130} tick={<TruncatedAxisTick maxChars={20} />} interval={0} />
@@ -239,7 +239,7 @@ export default function CostByVbu({ currency = 'USD', selectedVbu, onSelectedVbu
 
         <ChartCard title="License Count by VBU" subtitle="Assigned licenses/users — click a bar to select that VBU">
           {byVbuLicenses.length === 0 ? <EmptyState title="No VBU license data available" /> : (
-            <ResponsiveContainer width="100%" height={horizontalBarChartHeight(byVbuLicenses.length, { min: 180 })}>
+            <ResponsiveContainer width="100%" height={horizontalBarChartHeight(byVbuLicenses.length, { min: 155 })}>
               <BarChart data={byVbuLicenses} layout="vertical" margin={{ left: 8, right: 8 }}>
                 <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
                 <YAxis type="category" dataKey="name" width={130} tick={<TruncatedAxisTick maxChars={20} />} interval={0} />
@@ -252,7 +252,7 @@ export default function CostByVbu({ currency = 'USD', selectedVbu, onSelectedVbu
 
         <ChartCard title="Cost by Usage Status by VBU" subtitle="Cost tied to real usage vs. low-usage/no-usage licenses">
           {byVbuActiveVsUnused.length === 0 ? <EmptyState title="No VBU cost data available" /> : (
-            <ResponsiveContainer width="100%" height={horizontalBarChartHeight(byVbuActiveVsUnused.length, { min: 180 })}>
+            <ResponsiveContainer width="100%" height={horizontalBarChartHeight(byVbuActiveVsUnused.length, { min: 155 })}>
               <BarChart data={byVbuActiveVsUnused} layout="vertical" margin={{ left: 8, right: 8 }}>
                 <XAxis type="number" tick={{ fontSize: 10 }} />
                 <YAxis type="category" dataKey="name" width={130} tick={<TruncatedAxisTick maxChars={20} />} interval={0} />
@@ -267,7 +267,7 @@ export default function CostByVbu({ currency = 'USD', selectedVbu, onSelectedVbu
 
         <ChartCard title="Potential Savings by VBU" subtitle="Unused/low-usage cost, highest first — click a bar to select that VBU">
           {byVbuSavings.length === 0 ? <EmptyState title="No potential savings identified" hint="Every priced license in scope currently shows healthy usage." /> : (
-            <ResponsiveContainer width="100%" height={horizontalBarChartHeight(byVbuSavings.length, { min: 180 })}>
+            <ResponsiveContainer width="100%" height={horizontalBarChartHeight(byVbuSavings.length, { min: 155 })}>
               <BarChart data={byVbuSavings} layout="vertical" margin={{ left: 8, right: 8 }}>
                 <XAxis type="number" tick={{ fontSize: 10 }} />
                 <YAxis type="category" dataKey="name" width={130} tick={<TruncatedAxisTick maxChars={20} />} interval={0} />
@@ -280,7 +280,7 @@ export default function CostByVbu({ currency = 'USD', selectedVbu, onSelectedVbu
 
         <ChartCard title="Cost by Department" subtitle={selectedVbu ? `Within ${selectedVbu} — click a bar to filter` : 'All VBUs — click a bar to filter'}>
           {byDepartment.length === 0 ? <EmptyState title="No department data available" /> : (
-            <ResponsiveContainer width="100%" height={horizontalBarChartHeight(Math.min(byDepartment.length, 15), { min: 180 })}>
+            <ResponsiveContainer width="100%" height={horizontalBarChartHeight(Math.min(byDepartment.length, 15), { min: 155 })}>
               <BarChart data={byDepartment.slice(0, 15)} layout="vertical" margin={{ left: 8, right: 8 }}>
                 <XAxis type="number" tick={{ fontSize: 10 }} />
                 <YAxis type="category" dataKey="name" width={130} tick={<TruncatedAxisTick maxChars={20} />} interval={0} />
@@ -293,7 +293,7 @@ export default function CostByVbu({ currency = 'USD', selectedVbu, onSelectedVbu
 
         <ChartCard title="Cost by Product" subtitle={selectedVbu ? `Within ${selectedVbu} — click a bar to filter` : 'All VBUs — click a bar to filter'}>
           {byProduct.length === 0 ? <EmptyState title="No product data available" /> : (
-            <ResponsiveContainer width="100%" height={horizontalBarChartHeight(Math.min(byProduct.length, 15), { min: 180 })}>
+            <ResponsiveContainer width="100%" height={horizontalBarChartHeight(Math.min(byProduct.length, 15), { min: 155 })}>
               <BarChart data={byProduct.slice(0, 15)} layout="vertical" margin={{ left: 8, right: 8 }}>
                 <XAxis type="number" tick={{ fontSize: 10 }} />
                 <YAxis type="category" dataKey="name" width={130} tick={<TruncatedAxisTick maxChars={20} />} interval={0} />

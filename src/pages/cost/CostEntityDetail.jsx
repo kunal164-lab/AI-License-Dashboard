@@ -51,7 +51,7 @@ export default function CostEntityDetail({
         <div key={b.key} style={{ marginTop: 20 }}>
           <div className="card-title" style={{ marginBottom: 8 }}>{b.label}</div>
           {b.chart && b.items.length > 0 && (
-            <ResponsiveContainer width="100%" height={horizontalBarChartHeight(b.items.length, { min: 160 })}>
+            <ResponsiveContainer width="100%" height={horizontalBarChartHeight(b.items.length, { min: 140 })}>
               <BarChart data={b.items.map((x) => ({ name: x.name, value: x.monthlyCost }))} layout="vertical" margin={{ left: 8, right: 8 }}>
                 <XAxis type="number" tick={{ fontSize: 10 }} />
                 <YAxis type="category" dataKey="name" width={110} tick={<TruncatedAxisTick />} interval={0} />

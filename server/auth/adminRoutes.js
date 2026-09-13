@@ -12,6 +12,7 @@ import * as entraConfig from './entraConfig.js'
 import { resolveGroupId } from './authorize.js'
 import { requireAdminAccess } from './middleware.js'
 import { PAGES, PAGE_KEYS, PAGE_BY_KEY } from './pages.js'
+import { neutralizeFormula } from '../../src/reports/formulaSafety.js'
 
 export const adminRouter = express.Router()
 
@@ -128,9 +129,13 @@ adminRouter.get('/api/admin/access/audit-log', requireAdminAccess, (req, res) =>
   res.json({ events, rangeDays, limit, maxRangeDays: auditLogRepo.MAX_RETENTION_DAYS, maxLimit: auditLogRepo.MAX_LIMIT })
 })
 
+// Security-audit fix (CSV formula injection, CWE-1236) — actor_upn and the
+// detail JSON blob can carry admin-entered values (a Dashboard View name, a
+// VBU/group string, ...), the same directory-/admin-controlled field class
+// src/reports/csvReport.js and excelReport.js already neutralize.
 function csvEscape(v) {
   if (v === null || v === undefined) return ''
-  return '"' + String(v).replace(/"/g, '""') + '"'
+  return '"' + neutralizeFormula(String(v)).replace(/"/g, '""') + '"'
 }
 
 // Export obeys the EXACT SAME backend-enforced range/limit boundary as the

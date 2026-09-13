@@ -6,7 +6,7 @@ import {
 import KpiCard from '../../components/KpiCard'
 import ChartCard from '../../components/ChartCard'
 import EmptyState from '../../components/EmptyState'
-import { TruncatedAxisTick, horizontalBarChartHeight } from '../../components/charts/ChartAxisTick'
+import { TruncatedAxisTick, horizontalBarChartHeight, CHART_HEIGHT_ROOMY } from '../../components/charts/ChartAxisTick'
 import { colorForProduct } from '../../utils/productColors'
 import { formatMoney } from '../../utils/currency'
 import { useCostJson } from './useCostJson'
@@ -93,7 +93,7 @@ export default function CostOverview({ currency = 'USD', onOpenProduct, onOpenDe
 
         <ChartCard title="Cost by Usage Status" subtitle="Active vs. Low Usage vs. No Usage — current-license cost only">
           {costByUsageStatus.length === 0 ? <EmptyState /> : (
-            <ResponsiveContainer width="100%" height={220}>
+            <ResponsiveContainer width="100%" height={CHART_HEIGHT_ROOMY}>
               <PieChart>
                 <Pie data={costByUsageStatus} dataKey="value" nameKey="name" innerRadius={45} outerRadius={72}>
                   <Cell fill="#059669" /><Cell fill="#d97706" /><Cell fill="#dc2626" />
@@ -107,7 +107,7 @@ export default function CostOverview({ currency = 'USD', onOpenProduct, onOpenDe
 
         <ChartCard title="Cost by Provider">
           {data.byProvider.length === 0 ? <EmptyState /> : (
-            <ResponsiveContainer width="100%" height={220}>
+            <ResponsiveContainer width="100%" height={CHART_HEIGHT_ROOMY}>
               <PieChart>
                 <Pie data={data.byProvider.map((p) => ({ name: p.name, value: p.monthlyCost }))} dataKey="value" nameKey="name" innerRadius={45} outerRadius={72}>
                   {data.byProvider.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
@@ -134,7 +134,7 @@ export default function CostOverview({ currency = 'USD', onOpenProduct, onOpenDe
 
         <ChartCard title="Potential Savings by Product" subtitle="Where unused/low-usage cost is concentrated">
           {data.potentialSavingsByProduct.length === 0 ? <EmptyState title="No potential savings identified" hint="Every priced license currently shows healthy usage." /> : (
-            <ResponsiveContainer width="100%" height={horizontalBarChartHeight(data.potentialSavingsByProduct.length, { min: 180 })}>
+            <ResponsiveContainer width="100%" height={horizontalBarChartHeight(data.potentialSavingsByProduct.length, { min: 155 })}>
               <BarChart data={data.potentialSavingsByProduct} layout="vertical" margin={{ left: 8, right: 8 }}>
                 <XAxis type="number" tick={{ fontSize: 10 }} />
                 <YAxis type="category" dataKey="name" width={110} tick={<TruncatedAxisTick />} interval={0} />

@@ -3,14 +3,25 @@
 // plaintext store of secrets. AES-256-GCM via Node's built-in crypto module
 // — no new dependency needed.
 //
-// Key source: ENCRYPTION_KEY env var (64 hex chars = 32 bytes). If unset,
-// a fixed development-only key is used so local dev never breaks — but this
-// is NOT safe for any real deployment. Set a real ENCRYPTION_KEY in
-// production; anyone deploying this without one will see the warning below
-// on every server start.
+// Key source: ENCRYPTION_KEY env var (64 hex chars = 32 bytes). If unset
+// (never in production — see assertEncryptionKeyConfigured below), a
+// random key generated fresh in memory for THIS PROCESS ONLY is used so
+// local dev never breaks. Set a real ENCRYPTION_KEY in production; anyone
+// deploying this without one will see the warning below on every server
+// start.
 import crypto from 'crypto'
 
-const DEV_FALLBACK_KEY = 'ssp-ai-dashboard-dev-only-insecure-key-32b'.padEnd(32, '0').slice(0, 32)
+// Security-audit fix: this used to be a fixed, literal string committed to
+// source (DEV_FALLBACK_KEY) — anyone with repo access could decrypt any
+// credential ever encrypted under it, even in a properly-configured
+// deployment that only forgot to set ENCRYPTION_KEY once. Generating it
+// randomly per process means no real key value ever exists in the
+// repository at all, even for local-only use. Trade-off (dev-only, accepted):
+// it's regenerated on every restart, so anything encrypted under it (a
+// connector credential saved locally without ENCRYPTION_KEY configured)
+// will fail to decrypt after the next restart — set a real ENCRYPTION_KEY
+// in your own .env to avoid that, same as any other environment.
+const EPHEMERAL_DEV_KEY = crypto.randomBytes(32)
 
 // A real key is either 64 hex chars (32 bytes) or a plain string of at
 // least 32 characters (only the first 32 are used). Returns null if
@@ -36,11 +47,11 @@ function resolveKey() {
     throw new Error('ENCRYPTION_KEY is not set (or is not a valid 32-byte key) and NODE_ENV=production — refusing to use the insecure built-in development key.')
   }
   if (envKey) {
-    console.warn('[crypto] ENCRYPTION_KEY is set but is not 32 bytes (64 hex chars or a 32+ char string) — falling back to the insecure dev key.')
+    console.warn('[crypto] ENCRYPTION_KEY is set but is not 32 bytes (64 hex chars or a 32+ char string) — falling back to a random per-process dev key (credentials saved this run will not decrypt after a restart).')
   } else {
-    console.warn('[crypto] ENCRYPTION_KEY is not set. Using an insecure built-in development key. Set a real ENCRYPTION_KEY before deploying anywhere real credentials will be stored.')
+    console.warn('[crypto] ENCRYPTION_KEY is not set. Using a random per-process development key — credentials saved this run will NOT decrypt after a restart. Set a real ENCRYPTION_KEY before deploying anywhere real credentials will be stored.')
   }
-  return Buffer.from(DEV_FALLBACK_KEY)
+  return EPHEMERAL_DEV_KEY
 }
 
 // Called once at server startup, after dotenv has populated process.env

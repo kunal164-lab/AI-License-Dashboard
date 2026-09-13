@@ -4,6 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Internal IT Dashboard</title>
+    <!-- App icon/favicon — the same base SSP logo LOGO_REGISTRY's DEFAULT_LOGO_KEY
+         resolves to (src/utils/dashboardViewAssets.js), served from public/ so
+         Vite copies it into dist/ unchanged on every build. A single PNG (no
+         .ico conversion) is sufficient: every current browser accepts
+         rel="icon" with a PNG directly. apple-touch-icon reuses the same file
+         for "Add to Home Screen"/bookmark icons on iOS. -->
+    <link rel="icon" type="image/png" href="/ssp-logo.png" />
+    <link rel="apple-touch-icon" href="/ssp-logo.png" />
   </head>
   <body>
     <div id="root">\n      <div style="font-family:Arial,Helvetica,sans-serif;padding:30px;color:#333">Loading application... If this message remains, an error prevented the app from starting.</div>

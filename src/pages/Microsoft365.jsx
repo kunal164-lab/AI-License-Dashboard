@@ -17,7 +17,7 @@ import ProviderUserDetail from '../components/ProviderUserDetail'
 import MicrosoftLicenses, { LICENSE_EXPORT_COLUMNS, OVERVIEW_FILTER_COLUMNS as LICENSE_FILTER_COLUMNS } from './microsoft365/MicrosoftLicenses'
 import { groupApplicationsByName } from '../utils/microsoftApplicationGroups'
 import BrandLogo from '../components/BrandLogo'
-import { TruncatedAxisTick, horizontalBarChartHeight } from '../components/charts/ChartAxisTick'
+import { TruncatedAxisTick, horizontalBarChartHeight, CHART_HEIGHT_COMPACT, CHART_HEIGHT_ROOMY } from '../components/charts/ChartAxisTick'
 import { licenseStatusLabel } from '../utils/licenseStatus'
 import { describeFilters } from '../utils/tableFilters'
 import toast from '../utils/toast'
@@ -514,7 +514,7 @@ export default function Microsoft365({ allData, navigate, setFilter, currency = 
                 )}
                 {devicesByOs.length > 0 && (
                   <ChartCard title="Devices by OS">
-                    <ResponsiveContainer width="100%" height={220}>
+                    <ResponsiveContainer width="100%" height={CHART_HEIGHT_ROOMY}>
                       <PieChart>
                         <Pie data={devicesByOs} dataKey="value" nameKey="name" outerRadius={80} label>
                           {devicesByOs.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
@@ -628,7 +628,7 @@ export default function Microsoft365({ allData, navigate, setFilter, currency = 
                 {groupsByType.length > 0 && (
                   <div className="charts-2col" style={{ marginBottom: 16 }}>
                     <ChartCard title="Groups by Type">
-                      <ResponsiveContainer width="100%" height={220}>
+                      <ResponsiveContainer width="100%" height={CHART_HEIGHT_ROOMY}>
                         <PieChart>
                           <Pie data={groupsByType} dataKey="value" nameKey="name" outerRadius={80} label>
                             {groupsByType.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
@@ -656,7 +656,7 @@ export default function Microsoft365({ allData, navigate, setFilter, currency = 
               <div className="charts-2col">
                 {signInsByDay.length > 0 && (
                   <ChartCard title="Sign-ins by Day">
-                    <ResponsiveContainer width="100%" height={220}>
+                    <ResponsiveContainer width="100%" height={CHART_HEIGHT_COMPACT}>
                       <LineChart data={signInsByDay}>
                         <XAxis dataKey="day" tick={{ fontSize: 10 }} />
                         <YAxis allowDecimals={false} />

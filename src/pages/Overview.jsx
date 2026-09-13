@@ -9,7 +9,7 @@ import { colorForProduct } from '../utils/productColors'
 import { capabilitiesForProduct } from '../utils/providerRegistry'
 import { formatMoney } from '../utils/currency'
 import { aggregateTopActivities } from '../utils/activityMetrics'
-import { TruncatedAxisTick, horizontalBarChartHeight } from '../components/charts/ChartAxisTick'
+import { TruncatedAxisTick, horizontalBarChartHeight, CHART_HEIGHT_COMPACT, CHART_HEIGHT_ROOMY } from '../components/charts/ChartAxisTick'
 import {
   Users as UsersIcon, IdCard, BadgeCheck, Activity, DollarSign, PiggyBank, CircleOff, Link2,
   Database, ArrowRight, MessageSquare, Code2, FileCode, FolderKanban, Boxes,
@@ -228,7 +228,7 @@ export default function Overview({ data, allData, canonicalUsers, summary, globa
       <div className="charts">
         <ChartCard title="Spend by Product">
           {costByProductData.length === 0 ? <EmptyState title="No cost data available" hint="Cost information will appear when a source provides spend data." /> : (
-            <ResponsiveContainer width="100%" height={200}>
+            <ResponsiveContainer width="100%" height={CHART_HEIGHT_ROOMY}>
               <PieChart>
                 <Pie data={costByProductData} dataKey="value" nameKey="name" innerRadius={45} outerRadius={72}
                   onClick={(d) => d?.name && setFilter('product', { type: 'category', values: [d.name] })}>
@@ -243,7 +243,7 @@ export default function Overview({ data, allData, canonicalUsers, summary, globa
 
         <ChartCard title="Licenses by Product">
           {licensesByProductData.length === 0 ? <EmptyState /> : (
-            <ResponsiveContainer width="100%" height={200}>
+            <ResponsiveContainer width="100%" height={CHART_HEIGHT_ROOMY}>
               <PieChart>
                 <Pie data={licensesByProductData} dataKey="value" nameKey="name" innerRadius={45} outerRadius={72}
                   onClick={(d) => d?.name && setFilter('product', { type: 'category', values: [d.name] })}>
@@ -258,7 +258,7 @@ export default function Overview({ data, allData, canonicalUsers, summary, globa
 
         <ChartCard title="License Utilization by Product" subtitle="% of licenses active">
           {utilizationByProduct.length === 0 ? <EmptyState /> : (
-            <ResponsiveContainer width="100%" height={200}>
+            <ResponsiveContainer width="100%" height={CHART_HEIGHT_COMPACT}>
               <BarChart data={utilizationByProduct} onClick={(e) => e?.activeLabel && setFilter('product', { type: 'category', values: [e.activeLabel] })}>
                 <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                 <YAxis unit="%" width={32} tick={{ fontSize: 10 }} />
@@ -287,7 +287,7 @@ export default function Overview({ data, allData, canonicalUsers, summary, globa
           {!costTrend?.available || !costTrend.months?.length ? (
             <EmptyState title="Historical cost trend unavailable" hint="Historical monthly cost snapshots are not available yet." />
           ) : (
-            <ResponsiveContainer width="100%" height={200}>
+            <ResponsiveContainer width="100%" height={CHART_HEIGHT_COMPACT}>
               <LineChart data={costTrend.months.map((m) => ({ ...m, label: formatMonthLabel(m.month) }))}>
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} width={50} />
@@ -300,7 +300,7 @@ export default function Overview({ data, allData, canonicalUsers, summary, globa
 
         <ChartCard title="Active vs Unused Licenses">
           {activeVsUnused.length === 0 ? <EmptyState /> : (
-            <ResponsiveContainer width="100%" height={200}>
+            <ResponsiveContainer width="100%" height={CHART_HEIGHT_ROOMY}>
               <PieChart>
                 <Pie data={activeVsUnused} dataKey="value" nameKey="name" innerRadius={45} outerRadius={72}
                   onClick={(d) => d?.name && setFilter('usage_status', { type: 'category', values: d.name === 'Active' ? ACTIVE_STATUSES : ['No Usage'] })}>

@@ -8,7 +8,7 @@ import EmptyState from '../components/EmptyState'
 import StatusBadge from '../components/StatusBadge'
 import BrandLogo from '../components/BrandLogo'
 import ProviderUserDetail from '../components/ProviderUserDetail'
-import { TruncatedAxisTick, horizontalBarChartHeight } from '../components/charts/ChartAxisTick'
+import { TruncatedAxisTick, horizontalBarChartHeight, CHART_HEIGHT_ROOMY } from '../components/charts/ChartAxisTick'
 import { buildCanonicalUsers } from '../utils/userModel'
 import { activityStatusFor } from '../utils/activityScore'
 
@@ -144,7 +144,7 @@ export default function Kiro({ data, allData, microsoftDirectory, currency = 'US
           <div className="charts">
             {planDist.length > 0 && (
               <ChartCard title="Users by Plan / Tier">
-                <ResponsiveContainer width="100%" height={220}>
+                <ResponsiveContainer width="100%" height={CHART_HEIGHT_ROOMY}>
                   <PieChart>
                     <Pie data={planDist} dataKey="value" nameKey="name" outerRadius={80} label>
                       {planDist.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
@@ -156,7 +156,7 @@ export default function Kiro({ data, allData, microsoftDirectory, currency = 'US
             )}
             {usageStatusDist.length > 0 && (
               <ChartCard title="Monthly Records by Usage Status">
-                <ResponsiveContainer width="100%" height={220}>
+                <ResponsiveContainer width="100%" height={CHART_HEIGHT_ROOMY}>
                   <PieChart>
                     <Pie data={usageStatusDist} dataKey="value" nameKey="name" outerRadius={80} label>
                       {usageStatusDist.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}

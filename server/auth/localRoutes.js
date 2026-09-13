@@ -23,7 +23,24 @@ localAuthRouter.get('/api/auth/local/status', (req, res) => {
   res.json(localAuth.getPublicStatus())
 })
 
-localAuthRouter.post('/api/auth/local/setup', async (req, res) => {
+// Brute-force / resource-exhaustion protection (Part 4, and a security-
+// audit hardening pass) — bounds both sign-in attempts and setup attempts.
+// Setup is normally called exactly once ever (Part 2: only reachable while
+// no local admin exists), but was previously unlimited — since it hashes
+// the submitted password with bcrypt (12 rounds, deliberately expensive),
+// an unauthenticated caller could otherwise drive real CPU load on a fresh,
+// not-yet-configured instance with unlimited concurrent requests. Reusing
+// the exact same limiter as login (rather than a second one to reason
+// about) is generous enough for any legitimate use of either route.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts. Please wait 15 minutes and try again.' }
+})
+
+localAuthRouter.post('/api/auth/local/setup', loginLimiter, async (req, res) => {
   const { username, password, confirmPassword } = req.body || {}
   if (password !== confirmPassword) {
     return res.status(400).json({ error: 'Passwords do not match.' })
@@ -43,16 +60,6 @@ localAuthRouter.post('/api/auth/local/setup', async (req, res) => {
     req.session.access = access
     req.session.save(() => res.status(201).json({ ok: true }))
   })
-})
-
-// Brute-force protection (Part 4) — bounds sign-in attempts well above
-// normal mistyping and well below anything useful for password guessing.
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many sign-in attempts. Please wait 15 minutes and try again.' }
 })
 
 localAuthRouter.post('/api/auth/local/login', loginLimiter, async (req, res) => {

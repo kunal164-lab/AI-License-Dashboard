@@ -395,7 +395,7 @@ const WORLDWIDE_VBU = 'VBU - SSP Worldwide'
 // graphic's own SVG/tagline sizing in styles.css was scaled down to match,
 // since min-height is a floor, not a cap: content taller than it would
 // still force the header open regardless of this value). Sidebar/logo/KPI
-// grid are untouched by this bump. v5: real, provided artwork (public/
+// grid are untouched by this bump. v5: real, provided artwork (design-source/
 // Worldwide_Deciration.png, cropped to public/assets/dashboard/header-bg-
 // worldwide.png + sidebar-bg-worldwide.png) replaces both the SVG-
 // recreated header graphic (headerGraphicKey removed — the real header

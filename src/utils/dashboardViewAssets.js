@@ -119,7 +119,7 @@ export const HEADER_GRAPHIC_KEYS = ['globe-network']
 // centralized, never a path hardcoded into a component).
 // SSP Worldwide's own artwork ('globe-header'/'globe-sidebar') is likewise
 // a REAL, provided image asset (cropped from the approved SSP Worldwide
-// design reference, public/Worldwide_Deciration.png) — a dark-navy world/
+// design reference, design-source/Worldwide_Deciration.png) — a dark-navy world/
 // network globe for the sidebar, a pale-blue world-map banner with the
 // "Global People Stronger Together" script text already baked into the
 // artwork for the header. Because that text is already part of the image,

@@ -117,7 +117,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,Helveti
    margin:0 auto centers the capped-width content on an ultra-wide monitor
    (e.g. 3440px) instead of leaving it flush against the sidebar with a
    large empty gap on the right — max-width itself is unchanged. */
-.content{padding:clamp(12px,2vw,20px) clamp(12px,2.5vw,24px);max-width:1920px;width:100%;margin:0 auto}
+.content{padding:clamp(12px,1.8vw,18px) clamp(12px,2.2vw,22px);max-width:1920px;width:100%;margin:0 auto}
 
 /* ---------- Header ---------- */
 /* NOTE: deliberately NO overflow:hidden here (removed — see the bug it
@@ -134,7 +134,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,Helveti
 /* align-items:center (was flex-start) so the right-side controls stay
    vertically centered in the header regardless of exactly how tall the
    title block or a view's own header graphic render at. */
-.header{position:relative;display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px 24px;min-height:var(--header-min-height);border-bottom:1px solid var(--border);border-top:3px solid var(--header-accent);background:var(--header-background);flex-wrap:wrap}
+.header{position:relative;display:flex;justify-content:space-between;align-items:center;gap:14px;padding:14px 20px;min-height:var(--header-min-height);border-bottom:1px solid var(--border);border-top:3px solid var(--header-accent);background:var(--header-background);flex-wrap:wrap}
 
 /* Decorative Dashboard View header BACKGROUND — a REAL image asset
    (src/components/HeaderDecoration.jsx renders a plain <img>; SSP UK &
@@ -163,7 +163,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,Helveti
    image — CSS stacking rules paint a z-index:0 positioned element AFTER
    plain in-flow content, so without this, .header-decoration would cover
    these rather than sit behind them. */
-.header-title-block{position:relative;z-index:1}
+/* min-width:0 on both flex children — verified via an actual rendered
+   screenshot at a 390px mobile width: without it, flex items default to
+   min-width:auto, so .header-right refused to shrink/wrap its own
+   status-pill/buttons below their natural content width even after
+   .header's own flex-wrap dropped it to its own row, pushing the whole
+   page wider than the viewport (a real horizontal scrollbar, buttons cut
+   off past the right edge) — the exact same root cause already fixed once
+   in this file for .kpi-top .card-title. */
+.header-title-block{position:relative;z-index:1;min-width:0}
 
 /* Decorative Dashboard View header graphic (src/components/HeaderGraphic.jsx)
    — opt-in per view (SSP Worldwide's globe/flight-path motif); every other
@@ -183,8 +191,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,Helveti
    and the existing desktop size, rather than a single fixed size that
    either wraps awkwardly on a phone-width header or never gets any larger
    on an ultra-wide monitor. */
-.header h2{margin:0;font-size:clamp(16px,2vw,20px);font-weight:700}
-.header-right{position:relative;z-index:1;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.header h2{margin:0;font-size:clamp(15px,1.8vw,19px);font-weight:700}
+/* flex:1 1 auto (not the default 0 1 auto) — verified via an actual
+   rendered screenshot at 390px: once .header's own flex-wrap drops
+   .header-right to its own row, a lone wrapped flex item is sized to its
+   OWN natural content width, not stretched to the row's available width —
+   so .header-right's inner flex-wrap had no narrower box to wrap its
+   status-pill/buttons against, and the whole unwrapped row overflowed the
+   viewport instead. flex-grow:1 makes it actually claim the row's full
+   width once it's alone on one, giving its own children real room to wrap
+   into (justify-content:flex-end keeps them right-aligned as before,
+   matching the original space-between look on wide screens where this
+   item sits beside the title block instead). */
+.header-right{position:relative;z-index:1;display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap;flex:1 1 auto;min-width:0;max-width:100%}
 .header-status-pill{display:flex;flex-direction:column;gap:2px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 14px}
 .header-status-pill .status-line{display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px}
 .status-dot{width:8px;height:8px;border-radius:50%;background:var(--good);display:inline-block}
@@ -247,9 +266,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,Helveti
 .expand-toggle{display:inline-flex;align-items:center;gap:6px}
 
 /* ---------- Cards / KPIs ---------- */
-.card{background:var(--card);padding:18px;border-radius:var(--radius);border:1px solid var(--border);box-shadow:0 1px 3px rgba(16,24,40,0.05);margin-bottom:16px}
+/* Density tuning (Responsiveness spec, 90%-zoom-reference pass): 18px->16px
+   — the approved density was previously only being visually judged at ~90%
+   browser zoom (1/0.9 ~= 11% "roomier" per CSS pixel than a true 100%), so
+   every card-family padding/size below is trimmed a proportional amount to
+   read the same at a normal 100% zoom, never via zoom/scale/transform. */
+.card{background:var(--card);padding:16px;border-radius:var(--radius);border:1px solid var(--border);box-shadow:0 1px 3px rgba(16,24,40,0.05);margin-bottom:16px}
 .card-title{font-size:12px;color:var(--text);font-weight:700;text-transform:uppercase;letter-spacing:.03em}
-.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:16px;margin-bottom:20px}
+/* minmax floor of 190px (not narrowed further) — verified via an actual
+   rendered screenshot at 1366px: a narrower floor (150-170px) let 6+ KPI
+   cards pack into one row, each too narrow for a longer title ("License
+   Utilization", "Potential Savings") to wrap at its natural word boundary,
+   so .kpi-top .card-title's overflow-wrap:break-word fallback broke the
+   word itself ("UTILIZATI"/"ON"). 190px keeps every card wide enough for
+   its longest real title to wrap cleanly at 2 lines instead. */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:18px}
 /* A page with many more KPI tiles than the app-wide default (e.g.
    Microsoft 365's 13) needs a wider floor per card, or auto-fit packs
    them all into one row at the 170px default, squeezing every card down
@@ -257,20 +288,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,Helveti
    Root cause, not a band-aid: this is the SAME repeat(auto-fit,minmax())
    pattern already used everywhere else, just with a floor wide enough for
    a long label like "Non-Compliant Devices" to sit comfortably. */
-.kpi-row-dense{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.kpi-row-dense{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
 /* Flex children default to min-width:auto, which lets a long KPI title
    refuse to shrink and force its card (and the whole grid track) wider
    than intended — the actual root cause of KPI cards distorting the grid.
    Scoped to .kpi-top specifically so section-header titles elsewhere are
    untouched. */
 .kpi-top .card-title{min-width:0;overflow-wrap:break-word}
-.kpi{background:var(--card);padding:18px 20px;border-radius:var(--radius);border:1px solid var(--border);box-shadow:0 1px 3px rgba(16,24,40,0.05)}
+.kpi{background:var(--card);padding:16px 18px;border-radius:var(--radius);border:1px solid var(--border);box-shadow:0 1px 3px rgba(16,24,40,0.05)}
 .kpi-clickable{cursor:pointer;transition:box-shadow .12s,border-color .12s,transform .12s}
 .kpi-clickable:hover{box-shadow:0 8px 20px rgba(16,24,40,0.1);border-color:var(--accent);transform:translateY(-1px)}
 .kpi-clickable:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .kpi-filter-hint{margin-left:auto;color:#c3cbd9;flex-shrink:0}
 .kpi-top{display:flex;align-items:center;gap:10px}
-.kpi-icon-badge{width:38px;height:38px;border-radius:10px;background:#eef2ff;color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.kpi-icon-badge{width:34px;height:34px;border-radius:9px;background:#eef2ff;color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .kpi-icon-badge svg{width:18px;height:18px}
 .kpi-icon-badge.badge-blue{background:#eaf1ff;color:#2563eb}
 .kpi-icon-badge.badge-purple{background:#f3edff;color:#7c3aed}
@@ -278,7 +309,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,Helveti
 .kpi-icon-badge.badge-orange{background:#fff2e5;color:#d97706}
 .kpi-icon-badge.badge-red{background:#fdecec;color:#dc2626}
 .kpi-icon-badge.badge-teal{background:#e6fafa;color:#0891b2}
-.kpi-value{font-size:clamp(20px,2.4vw,28px);font-weight:700;margin-top:8px;line-height:1.1;color:var(--text)}
+.kpi-value{font-size:clamp(18px,2.1vw,25px);font-weight:700;margin-top:8px;line-height:1.1;color:var(--text)}
 .kpi-bottom{display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:8px}
 .kpi-trend{font-size:11px;font-weight:700;padding:2px 6px;border-radius:999px;background:#f1f5f9;color:var(--muted);white-space:nowrap}
 .kpi-trend.trend-up{background:#ecfdf5;color:var(--good)}
@@ -316,7 +347,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,Helveti
 /* Explicit breakpoints (rather than pure auto-fit) so the cascade matches
    1366/1440/1920 targets predictably: 5 cols on very wide screens, stepping
    down to 1 on narrow ones. */
-.charts{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-top:4px}
+.charts{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:4px}
 @media (max-width:1700px){.charts{grid-template-columns:repeat(4,1fr)}}
 @media (max-width:1280px){.charts{grid-template-columns:repeat(3,1fr)}}
 @media (max-width:900px){.charts{grid-template-columns:repeat(2,1fr)}}
@@ -328,7 +359,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,Helveti
    actually sized in this app. */
 .charts-2col{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:4px}
 @media (max-width:900px){.charts-2col{grid-template-columns:1fr}}
-.chart-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:0 1px 3px rgba(16,24,40,0.05);display:flex;flex-direction:column;min-height:252px;min-width:0}
+.chart-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;box-shadow:0 1px 3px rgba(16,24,40,0.05);display:flex;flex-direction:column;min-height:225px;min-width:0}
 .chart-card-header{margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)}
 .chart-card-body{flex:1;display:flex;flex-direction:column;justify-content:center}
 .chart-card-footer{margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
@@ -442,7 +473,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,Helveti
 .m365-export-chip:hover{background:var(--accent);color:#fff}
 
 /* ---------- Product cards (Products page) ---------- */
-.product-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:16px}
+.product-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-bottom:16px}
 .product-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;box-shadow:0 1px 2px rgba(16,24,40,0.03)}
 .product-card-header{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .product-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
@@ -536,7 +567,7 @@ label{font-size:12px;font-weight:600;color:var(--muted)}
 label>select,label>input:not([type=checkbox]):not([type=radio]),label>textarea{display:block;width:100%;margin-top:4px;font-weight:400;color:var(--text)}
 
 /* ---------- Cost page ---------- */
-.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px 16px}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:12px 14px}
 .form-grid label{display:flex;flex-direction:column}
 .form-section-title{font-size:13px;font-weight:700;color:var(--text);margin:18px 0 4px}
 .form-section-title:first-child{margin-top:0}
@@ -625,6 +656,23 @@ label>select,label>input:not([type=checkbox]):not([type=radio]),label>textarea{d
   .nav button{justify-content:center;padding:10px 8px}
   .nav-icon{width:auto}
   .sidebar-footer .button.primary{padding:10px 6px}
+  /* Verified via an actual rendered screenshot at 390px: a lone wrapped
+     flex item (.header-right, once .header's own flex-wrap drops it below
+     the title block) is otherwise sized to its own unwrapped content width,
+     not the row it's alone on — so its status-pill/buttons never got a
+     narrow-enough box to wrap against and silently overflowed the
+     viewport (a real horizontal scrollbar). An explicit width:100% at this
+     breakpoint (never on wider screens, where this item legitimately sits
+     beside the title block instead) forces that box, giving its own
+     children real room to wrap. */
+  .header-right{width:100%}
+  /* Force one child per row at this width — a plain flex-wrap:wrap on
+     .header-right (confirmed still overflowing via an actual rendered
+     screenshot even with the width:100% above) left the status-pill and
+     refresh button sharing a row whose combined natural width exceeds a
+     390px phone viewport; each child claiming its own full row removes any
+     ambiguity about whether/when a pair of items wraps. */
+  .header-right>*{flex:1 1 100%}
 }
 
 /* ---------- Auth / Sign-in ---------- */

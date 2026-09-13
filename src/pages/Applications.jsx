@@ -16,7 +16,7 @@ import BrandLogo from '../components/BrandLogo'
 import UserDetailModal from '../components/microsoft/UserDetailModal'
 import DeviceDetailModal from '../components/microsoft/DeviceDetailModal'
 import { groupApplicationsByName } from '../utils/microsoftApplicationGroups'
-import { TruncatedAxisTick, horizontalBarChartHeight } from '../components/charts/ChartAxisTick'
+import { TruncatedAxisTick, horizontalBarChartHeight, CHART_HEIGHT_COMPACT, CHART_HEIGHT_ROOMY } from '../components/charts/ChartAxisTick'
 import { buildReportFilename } from '../reports/reportFilenames'
 import { downloadBlob } from '../reports/downloadFile'
 import { formatRelativeTime } from '../utils/formatRelativeTime'
@@ -215,7 +215,7 @@ export default function Applications({ navigate }) {
 
           <div className="charts">
             <ChartCard title="Top Applications" subtitle="By detected installation count">
-              <ResponsiveContainer width="100%" height={280}>
+              <ResponsiveContainer width="100%" height={CHART_HEIGHT_ROOMY}>
                 <BarChart data={topApplicationsChart} layout="vertical" margin={{ left: 8, right: 28 }}>
                   <XAxis type="number" tick={{ fontSize: 10 }} />
                   <YAxis type="category" dataKey="name" width={120} tick={<TruncatedAxisTick />} interval={0} />
@@ -229,7 +229,7 @@ export default function Applications({ navigate }) {
 
             <ChartCard title="Applications by Operating System">
               {osDistribution.length === 0 ? <EmptyState /> : (
-                <ResponsiveContainer width="100%" height={220}>
+                <ResponsiveContainer width="100%" height={CHART_HEIGHT_ROOMY}>
                   <PieChart>
                     <Pie data={osDistribution} dataKey="value" nameKey="name" innerRadius={45} outerRadius={72}>
                       {osDistribution.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
@@ -243,7 +243,7 @@ export default function Applications({ navigate }) {
 
             <ChartCard title="Installation Distribution" subtitle="Number of applications by device count">
               {installBuckets.length === 0 ? <EmptyState /> : (
-                <ResponsiveContainer width="100%" height={220}>
+                <ResponsiveContainer width="100%" height={CHART_HEIGHT_COMPACT}>
                   <BarChart data={installBuckets}>
                     <XAxis dataKey="name" tick={{ fontSize: 9 }} interval={0} angle={-20} textAnchor="end" height={50} />
                     <YAxis width={32} tick={{ fontSize: 10 }} />
@@ -256,7 +256,7 @@ export default function Applications({ navigate }) {
 
             <ChartCard title="Top Publishers" subtitle="By number of applications — hover a name for the full value">
               {publisherDistribution.length === 0 ? <EmptyState /> : (
-                <ResponsiveContainer width="100%" height={horizontalBarChartHeight(publisherDistribution.length, { min: 220 })}>
+                <ResponsiveContainer width="100%" height={horizontalBarChartHeight(publisherDistribution.length, { min: 190 })}>
                   <BarChart data={publisherDistribution} layout="vertical" margin={{ left: 8, right: 28 }}>
                     <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
                     <YAxis type="category" dataKey="name" width={110} tick={<TruncatedAxisTick />} interval={0} />

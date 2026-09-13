@@ -148,3 +148,24 @@ test('two simultaneous first-admin setup requests on a fresh install -> exactly 
   const statuses = [r1.status, r2.status].sort()
   assert.deepEqual(statuses, [201, 409], `expected exactly one 201 and one 409, got ${JSON.stringify(statuses)}`)
 })
+
+// Security-audit hardening: /api/auth/local/setup used to have NO rate
+// limit at all (only /login did), despite hashing the submitted password
+// with bcrypt (12 rounds, deliberately expensive) on every call — an
+// unauthenticated caller could otherwise drive real CPU load on a
+// not-yet-configured instance. It now shares the exact same limiter login
+// already used. This is deliberately the LAST test in this file: tripping
+// the limiter here consumes the shared window for the rest of this
+// process, so no test after this one may call /setup or /login again.
+test('POST /api/auth/local/setup is now rate-limited (previously unlimited) — sharing the same limiter as /login', async () => {
+  let sawLimited = false
+  for (let i = 0; i < 12; i++) {
+    const r = await fetch(`${baseUrl}/api/auth/local/setup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'flood', password: 'another-strong-password', confirmPassword: 'another-strong-password' })
+    })
+    if (r.status === 429) { sawLimited = true; break }
+  }
+  assert.ok(sawLimited, 'expected /api/auth/local/setup to eventually respond 429 once the shared rate limit is exceeded')
+})

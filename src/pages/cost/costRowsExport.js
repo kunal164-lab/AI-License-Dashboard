@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx'
 import { buildEntityReportFilename, buildReportFilename } from '../../reports/reportFilenames'
 import { downloadBlob } from '../../reports/downloadFile'
+import { neutralizeFormula } from '../../reports/formulaSafety'
 
 // Scoped CSV/XLSX export for a single Cost Analytics drill-down (Part 24 —
 // "the user should be able to export the current perspective"). Reuses the
@@ -28,7 +29,10 @@ export function toPlainRows(rows) {
 // every other page's export menu already uses — see reportFilenames.js) —
 // exactly one of the two should be passed.
 export function exportCostRows(rows, format, { entityName, sheetName = 'Cost', scope, filters } = {}) {
-  const data = toPlainRows(rows || [])
+  // Security-audit fix (CSV/Excel formula injection, CWE-1236) — User/
+  // Email/Department/VBU/etc. below are directory-sourced, the same field
+  // class src/reports/csvReport.js and excelReport.js already neutralize.
+  const data = toPlainRows(rows || []).map((row) => Object.fromEntries(Object.entries(row).map(([k, v]) => [k, neutralizeFormula(v)])))
   function filename(ext) {
     return entityName !== undefined
       ? buildEntityReportFilename({ prefix: 'Internal_IT_Cost', name: entityName, ext })

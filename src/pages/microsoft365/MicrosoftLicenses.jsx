@@ -7,7 +7,7 @@ import QuickFilterBar from '../../components/QuickFilterBar'
 import ActiveFilterBar from '../../components/ActiveFilterBar'
 import DataTable from '../../components/DataTable'
 import StatusBadge from '../../components/StatusBadge'
-import { TruncatedAxisTick, horizontalBarChartHeight } from '../../components/charts/ChartAxisTick'
+import { TruncatedAxisTick, horizontalBarChartHeight, CHART_HEIGHT_ROOMY } from '../../components/charts/ChartAxisTick'
 
 const PIE_COLORS = ['#0b5fff', '#7c3aed', '#059669', '#f97316', '#0891b2', '#dc2626', '#64748b', '#d97706', '#0d9488', '#9333ea', '#e11d48', '#4f46e5', '#65a30d', '#0284c7']
 
@@ -248,7 +248,7 @@ export default function MicrosoftLicenses({ users = [], copilotByEmail, onOpenMi
         <>
           <div className="charts-2col" style={{ marginBottom: 16 }}>
             <ChartCard title="Assigned Users by License" subtitle="Share of assigned seats across monitored licenses">
-              <ResponsiveContainer width="100%" height={260}>
+              <ResponsiveContainer width="100%" height={CHART_HEIGHT_ROOMY}>
                 <PieChart>
                   <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={50} outerRadius={90} label={({ percent }) => `${Math.round(percent * 100)}%`}>
                     {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
@@ -260,7 +260,7 @@ export default function MicrosoftLicenses({ users = [], copilotByEmail, onOpenMi
             </ChartCard>
 
             <ChartCard title="Assigned Licenses" subtitle="Current assignment count per license, highest first">
-              <ResponsiveContainer width="100%" height={horizontalBarChartHeight(barData.length, { min: 220 })}>
+              <ResponsiveContainer width="100%" height={horizontalBarChartHeight(barData.length, { min: 190 })}>
                 <BarChart data={barData} layout="vertical" margin={{ left: 8, right: 8 }}>
                   <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
                   <YAxis type="category" dataKey="name" width={160} tick={<TruncatedAxisTick maxChars={24} />} interval={0} />

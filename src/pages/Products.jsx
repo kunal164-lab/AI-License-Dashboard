@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react'
 import ChartCard from '../components/ChartCard'
+import { CHART_HEIGHT_COMPACT, CHART_HEIGHT_ROOMY } from '../components/charts/ChartAxisTick'
 import EmptyState from '../components/EmptyState'
 import ActiveFilterBar from '../components/ActiveFilterBar'
 import UserDetail from '../components/UserDetail'
@@ -403,7 +404,7 @@ export default function Products({ data, allData, globalFilters, setFilter, clea
 
       <div className="charts">
         <ChartCard title="License Utilization by Product">
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={CHART_HEIGHT_COMPACT}>
             <BarChart data={utilizationData}>
               <XAxis dataKey="name" tick={{ fontSize: 11 }} />
               <YAxis unit="%" width={36} />
@@ -417,7 +418,7 @@ export default function Products({ data, allData, globalFilters, setFilter, clea
 
         <ChartCard title="Spend by Product">
           {spendData.length === 0 ? <EmptyState /> : (
-            <ResponsiveContainer width="100%" height={220}>
+            <ResponsiveContainer width="100%" height={CHART_HEIGHT_ROOMY}>
               <PieChart>
                 <Pie data={spendData} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80}>
                   {spendData.map((entry, i) => <Cell key={i} fill={colorForProduct(entry.name)} />)}
